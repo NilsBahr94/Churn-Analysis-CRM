@@ -5,7 +5,7 @@ install.packages("tidyverse")
 install.packages("data.table")
 install.packages("ggplot2")
 install.packages("caret")
-install.packages("lubridate"))
+install.packages("lubridate")
 
 # Load Packages ------------------------------------------------------------
 
@@ -18,7 +18,7 @@ require(lubridate)
 
 # Import 2017 Data -------------------------------------------------------------
 
-data_2017 = read_excel("Data\\Data January 2017.xlsx")
+# data_2017 = read_excel("Data\\Data January 2017.xlsx")
 # write.csv(data_2017, "Data_January_2017.csv")
 
 data = fread("Data\\Data_January_2017.csv", na.strings = c("-", "NA"))
@@ -56,9 +56,9 @@ apply(data, 2, function(col)sum(is.na(col))/length(col))
 
 # Modeling ----------------------------------------------------------------
 
-myGrid = data.frame()
+myGrid = expand.grid() # insert xgboost parameters here 
 
-myControl = trainControl(method = "cv", number = 10, summaryFunction = twoClassSummary)
+myControl = trainControl(method = "cv", number = 10, summaryFunction = defaultSummary)
 
 model = train(churn ~., data = data, method = "xgbLinear", 
               trControl = myControl, tuneGrid = myGrid
