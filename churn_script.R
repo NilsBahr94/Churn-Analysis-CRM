@@ -7,6 +7,8 @@ install.packages("ggplot2")
 install.packages("caret")
 install.packages("lubridate")
 
+a = 1
+
 # Load Packages ------------------------------------------------------------
 
 require(readxl)
