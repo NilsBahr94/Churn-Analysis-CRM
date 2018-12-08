@@ -35,12 +35,26 @@ data$Age = as.integer(data$Age)
 data$`Customer since` = ymd(data$`Customer since`)
 data$`Contract start date` = ymd(data$`Contract start date`)
 data$Consumption = as.numeric(data$Consumption) 
+data$Churn = as.factor(data$Churn)
+
+data$`Client type` = as.factor(data$`Client type`)
+data$`Bill shock` = as.factor(data$`Bill shock`)
+data$`Opt In Mail` = as.factor(data$`Opt In Mail`)
+data$`Opt In Post` = as.factor(data$`Opt In Post`)
+data$`Opt In Tel` = as.factor(data$`Opt In Tel`)
 
 
 # Explore Data I ----------------------------------------------------------
 
 str(data)
 summary(data)
+
+# Explore numerical features, detect outliers
+
+# Age
+# Consumption
+# Payment on Account
+# Annual Account
 
 # Clean Data --------------------------------------------------------------
 
@@ -56,13 +70,20 @@ apply(data, 2, function(col)sum(is.na(col))/length(col))
 
 # Modeling ----------------------------------------------------------------
 
-myGrid = expand.grid() # insert xgboost parameters here 
+myGrid = expand.grid(max_depth =c(5, 10, 15), nrounds =c(50,100), eta = 0.1, gamma = 1, min_child_weight = 2) # insert xgboost parameters here 
+
 
 myControl = trainControl(method = "cv", number = 10, summaryFunction = defaultSummary)
 
-model = train(churn ~., data = data, method = "xgbLinear", 
-              trControl = myControl, tuneGrid = myGrid
-              )
+model = train(Churn ~., data = data, method = "xgbTree", 
+              trControl = myControl, tuneGrid = myGrid)
+
+
+# eta [0.01 - 0.2]
+# max_depth [500]
+# min_child_weight 
+
+model = train(churn ~ ., data = data, method = "naive_bayes", method = "")
 
 plot(model)
 
