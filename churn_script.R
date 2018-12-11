@@ -18,10 +18,20 @@ require(lubridate)
 
 # Import 2017 Data -------------------------------------------------------------
 
+#n
+
 # data_2017 = read_excel("Data\\Data January 2017.xlsx")
 # write.csv(data_2017, "Data_January_2017.csv")
 
 data = fread("Data\\Data_January_2017.csv", na.strings = c("-", "NA"))
+
+# l
+
+data_2017 = read_excel("Data/Data January 2017.xlsx")
+write.csv(data_2017, "Data_January_2017.csv")
+
+data = fread("Data/Data_January_2017.csv", na.strings = c("-", "NA"))
+
 
 # Replace "-" by NA
 data[data == "-"] = NA
