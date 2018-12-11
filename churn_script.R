@@ -21,6 +21,7 @@ require(lubridate)
 # data_2017 = read_excel("Data\\Data January 2017.xlsx")
 # write.csv(data_2017, "Data_January_2017.csv")
 
+# N
 data = fread("Data\\Data_January_2017.csv", na.strings = c("-", "NA"))
 
 # Replace "-" by NA
@@ -28,6 +29,7 @@ data[data == "-"] = NA
 
 #Convert features into right data types
 data$V1 = as.character(data$V1)
+data$Title = as.factor(data$Title)
 data$`Zip code` = as.character(data$`Zip code`)
 data$DBII = as.numeric(data$DBII)
 data$Contract_ID = as.character(data$Contract_ID)
@@ -45,16 +47,29 @@ data$`Opt In Tel` = as.factor(data$`Opt In Tel`)
 
 # Online Account - NA to 0 
 
+setnames(data, `Client type`, Client_type)
+
 
 # Explore Data I ----------------------------------------------------------
 
 str(data)
 summary(data)
 
+summary(data[`Client type`=="1", .(`Client type`, Age)])
+
+
 # Explore numerical features, detect outliers
 
 # Age
+# Check Age feature 
+nrow(data[Age < 18])
+nrow(data[Age >= 105])
 # Consumption
+summary(data[, Consumption])
+plot(data[, Consumption])
+
+max(data$Consumption)
+
 # Payment on Account
 # Annual Account
 
