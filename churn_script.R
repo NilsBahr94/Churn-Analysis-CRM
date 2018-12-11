@@ -7,8 +7,6 @@ install.packages("ggplot2")
 install.packages("caret")
 install.packages("lubridate")
 
-a = 1
-
 # Load Packages ------------------------------------------------------------
 
 require(readxl)
@@ -44,6 +42,8 @@ data$`Bill shock` = as.factor(data$`Bill shock`)
 data$`Opt In Mail` = as.factor(data$`Opt In Mail`)
 data$`Opt In Post` = as.factor(data$`Opt In Post`)
 data$`Opt In Tel` = as.factor(data$`Opt In Tel`)
+
+# Online Account - NA to 0 
 
 
 # Explore Data I ----------------------------------------------------------
@@ -85,7 +85,7 @@ model = train(Churn ~., data = data, method = "xgbTree",
 # max_depth [500]
 # min_child_weight 
 
-model = train(churn ~ ., data = data, method = "naive_bayes", method = "")
+model = train(Churn ~ ., data = data, method = "naive_bayes", trControl = myControl)
 
 plot(model)
 
