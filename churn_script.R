@@ -86,22 +86,27 @@ data$`Online_account`[is.na(data$`Online_account`)] = 0
 data$Recovered[data$`Recovered`=="X"] = 1
 data$`Recovered`[is.na(data$`Recovered`)] = 0
 
-#Transform "Contract start date" to number of months
-data$`Contract start date` = dmy(data$`Contract start date`, locale = "English")
-data$`Contract_since` = unlist(lapply(data$`Contract start date`, FUN = function(x) interval(ymd(x),ymd('20170131')) %/% months(1)))
-# Für Customer since auch in Anzahl Monate transformieren anstelle von Datum
+#Transform "Customer_since" to number of months
+data$`Customer_since` = ymd(data$`Customer_since`)
+data$`Customer_since_interval` = interval(ymd(data$`Customer_since`), ymd(20170201)) %/% months(1)
+
+#Transform "Contract_start_date" to number of months
+data$`Contract_start_date` = ymd(data$`Contract_start_date`)
+data$`Contract_start_date_interval` = interval(ymd(data$`Contract_start_date`), ymd(20170201)) %/% months(1)
 
 #Transform "Market area" to binary variables
 data$`Grundversorger` = unlist(lapply(data$`Market area`, FUN = function(x) ifelse(x=="Grundversorger",1,0) ))
 data$`Erweitert` = unlist(lapply(data$`Market area`, FUN = function(x) ifelse(x=="Erweitertes Netzgebiet",1,0) ))
 data$`Restlich` = unlist(lapply(data$`Market area`, FUN = function(x) ifelse(x=="Restliches Bundesgebiet",1,0) ))
-data = data[,-c("Contract start date", "Market area")] # Raus 
 
 #Convert features into right data types
 data$Contract_ID = as.character(data$Contract_ID)
 data$`Zip_code` = as.character(data$`Zip_code`)
 data$`Client_type` = as.factor(data$`Client_type`)
 data$Age = as.integer(data$Age)
+data$Minimum_contract_term = as.integer(data$Minimum_contract_term)
+data$Notice_period = as.integer(data$Notice_period)
+data$Automatic_contract_extension = as.integer(data$Automatic_contract_extension)
 data$Consumption = as.numeric(data$Consumption) 
 data$Payment_on_account = as.numeric(data$Payment_on_account)
 data$`Annual_account` = as.numeric(gsub(",", ".", gsub("\\.", "", data$`Annual_account`)))
@@ -116,8 +121,9 @@ data$`Restlich` = as.factor(data$`Restlich`)
 data$Recovered = as.factor(data$Recovered)
 data$Churn = as.factor(data$Churn)
 data$DBII = as.numeric(gsub(",", ".", gsub("\\.", "", data$DBII)))
+data$Customer_since_interval = as.integer(data$Customer_since_interval)
+data$Contract_start_date_interval = as.integer(data$Contract_start_date_interval)
 
-# Neue Variablen reinpacken: Customer since etc. 
 
 # Feature engineering -------------------------------------------------------------
 
@@ -125,6 +131,8 @@ data$DBII = as.numeric(gsub(",", ".", gsub("\\.", "", data$DBII)))
 data$`International` = unlist(gregexpr("[0-9]{5}", data$`Zip_code`)) # Nochmal überprüfen, kurze PLZ müssen nicht unbedingt im Ausland sein
 data$`International`[data$`International` == 1] = 0
 data$`International`[data$`International` == -1] = 1
+
+data$`Actual_payment` = data$Payment_on_account * 12 + data$Annual_account
 
 # Explore Data I ----------------------------------------------------------
 
