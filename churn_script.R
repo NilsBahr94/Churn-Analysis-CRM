@@ -28,25 +28,26 @@ require(mice)
 
 # Import 2017 Data -------------------------------------------------------------
 
-# data_2017 = read_excel("Data/Data January 2017.xlsx")
-# Alternativ Excel einladen - Recovered, sodass X's bestehen  
-
+# data_2017 = read_excel("Data/Data January 2017.xlsx", na = "-")
 # write.csv(data_2017, "Data_January_2017.csv")
 
 # N
-data = fread("Data\\Data_January_2017.csv", na.strings = c("-", "NA"))
+data = fread("Data\\Data_January_2017.csv", na.strings = "NA")
 
 # L
-data = fread("Data/Data_January_2017.csv", na.strings = c("-", "NA"))
+data = fread("Data/Data_January_2017.csv", na.strings = "NA")
 
-#remove title, V1, customer_since, Notice_period and automatic_contract_extension from the data set
+#remove title and V1 from the data set
 data = data[,c("Contract_ID", 
                "Client type", 
                "Zip code", 
                "Age", 
                "Duration of customer relationship", 
-               "Contract start date", # Customer since, Notice Period, Automatic Contract extension
+               "Customer since",
+               "Contract start date", 
                "Minimum contract term", 
+               "Notice period",
+               "Automatic contract extension",
                "Consumption", 
                "Payment on account", 
                "Annual account", 
@@ -64,7 +65,11 @@ data = data[,c("Contract_ID",
 names(data)[names(data) == 'Client type'] <- 'Client_type' # Customer since, Notice Period, Automatic Contract extension
 names(data)[names(data) == 'Zip code'] <- 'Zip_code'
 names(data)[names(data) == 'Duration of customer relationship'] <- 'Duration_of_customer_relationship'  
+names(data)[names(data) == 'Customer since' ] <- 'Customer_since' 
+names(data)[names(data) == 'Contract start date' ] <- 'Contract_start_date' 
 names(data)[names(data) == 'Minimum contract term'] <- 'Minimum_contract_term'
+names(data)[names(data) == 'Notice period' ] <- 'Notice_period' 
+names(data)[names(data) == 'Automatic contract extension' ] <- 'Automatic_contract_extension' 
 names(data)[names(data) == 'Payment on account'] <- 'Payment_on_account'
 names(data)[names(data) == 'Annual account'] <- 'Annual_account'
 names(data)[names(data) == 'Bill shock'] <- 'Bill_shock'
@@ -72,16 +77,14 @@ names(data)[names(data) == 'Online account'] <- 'Online_account'
 names(data)[names(data) == 'Opt In Mail'] <- 'Opt_In_Mail'
 names(data)[names(data) == 'Opt In Post'] <- 'Opt_In_Post'
 names(data)[names(data) == 'Opt In Tel'] <- 'Opt_In_Tel'
-
-# Replace "-" by NA
-data[data == "-"] = NA
+names(data)[names(data) == 'Market area'] <- 'Market_area'
 
 # Online Account - NA to 0 
 data$`Online_account`[is.na(data$`Online_account`)] = 0
 
 # Recovered - "" to 0 and "X" to 1
-data$Recovered[data$`Recovered`!="X"] = 0
 data$Recovered[data$`Recovered`=="X"] = 1
+data$`Recovered`[is.na(data$`Recovered`)] = 0
 
 #Transform "Contract start date" to number of months
 data$`Contract start date` = dmy(data$`Contract start date`, locale = "English")
@@ -208,7 +211,7 @@ confusionMatrix()
 
 # Import 2018 Data ----------------------------------------------------------------
 
-data_2018 = read_excel("Data\\Data November 2018.xlsx")
+data_2018 = read_excel("Data\\Data November 2018.xlsx", na = "-")
 # write.csv(data_2018, "Data_November_2018.csv")
 
 data_2018 = fread("Data\\Data_November_2018.csv", na.strings = "-")
