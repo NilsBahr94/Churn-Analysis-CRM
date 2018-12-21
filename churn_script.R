@@ -29,6 +29,8 @@ require(mice)
 # Import 2017 Data -------------------------------------------------------------
 
 # data_2017 = read_excel("Data/Data January 2017.xlsx")
+# Alternativ Excel einladen - Recovered, sodass X's bestehen  
+
 # write.csv(data_2017, "Data_January_2017.csv")
 
 # N
@@ -43,7 +45,7 @@ data = data[,c("Contract_ID",
                "Zip code", 
                "Age", 
                "Duration of customer relationship", 
-               "Contract start date", 
+               "Contract start date", # Customer since, Notice Period, Automatic Contract extension
                "Minimum contract term", 
                "Consumption", 
                "Payment on account", 
@@ -59,9 +61,9 @@ data = data[,c("Contract_ID",
                "Churn")]
 
 #rename cols in order to avoid problems with imputation
-names(data)[names(data) == 'Client type'] <- 'Client_type'
+names(data)[names(data) == 'Client type'] <- 'Client_type' # Customer since, Notice Period, Automatic Contract extension
 names(data)[names(data) == 'Zip code'] <- 'Zip_code'
-names(data)[names(data) == 'Duration of customer relationship'] <- 'Duration_of_customer_relationship'
+names(data)[names(data) == 'Duration of customer relationship'] <- 'Duration_of_customer_relationship'  
 names(data)[names(data) == 'Minimum contract term'] <- 'Minimum_contract_term'
 names(data)[names(data) == 'Payment on account'] <- 'Payment_on_account'
 names(data)[names(data) == 'Annual account'] <- 'Annual_account'
@@ -84,12 +86,13 @@ data$Recovered[data$`Recovered`=="X"] = 1
 #Transform "Contract start date" to number of months
 data$`Contract start date` = dmy(data$`Contract start date`, locale = "English")
 data$`Contract_since` = unlist(lapply(data$`Contract start date`, FUN = function(x) interval(ymd(x),ymd('20170131')) %/% months(1)))
+# Für Customer since auch in Anzahl Monate transformieren anstelle von Datum
 
 #Transform "Market area" to binary variables
 data$`Grundversorger` = unlist(lapply(data$`Market area`, FUN = function(x) ifelse(x=="Grundversorger",1,0) ))
 data$`Erweitert` = unlist(lapply(data$`Market area`, FUN = function(x) ifelse(x=="Erweitertes Netzgebiet",1,0) ))
 data$`Restlich` = unlist(lapply(data$`Market area`, FUN = function(x) ifelse(x=="Restliches Bundesgebiet",1,0) ))
-data = data[,-c("Contract start date", "Market area")]
+data = data[,-c("Contract start date", "Market area")] # Raus 
 
 #Convert features into right data types
 data$Contract_ID = as.character(data$Contract_ID)
@@ -111,10 +114,12 @@ data$Recovered = as.factor(data$Recovered)
 data$Churn = as.factor(data$Churn)
 data$DBII = as.numeric(gsub(",", ".", gsub("\\.", "", data$DBII)))
 
+# Neue Variablen reinpacken: Customer since etc. 
+
 # Feature engineering -------------------------------------------------------------
 
 #Create feature "international"
-data$`International` = unlist(gregexpr("[0-9]{5}", data$`Zip_code`))
+data$`International` = unlist(gregexpr("[0-9]{5}", data$`Zip_code`)) # Nochmal überprüfen, kurze PLZ müssen nicht unbedingt im Ausland sein
 data$`International`[data$`International` == 1] = 0
 data$`International`[data$`International` == -1] = 1
 
