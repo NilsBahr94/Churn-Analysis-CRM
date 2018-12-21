@@ -1,20 +1,30 @@
 # Install Packages --------------------------------------------------------
 
+install.packages("tidyverse")
 install.packages("readxl")
 install.packages("tidyverse")
 install.packages("data.table")
 install.packages("ggplot2")
 install.packages("caret")
 install.packages("lubridate")
+install.packages("xgboost")
+install.packages("klaR")
+install.packages("rlang")
+install.packages("mice")
 
 # Load Packages ------------------------------------------------------------
 
+require(tidyverse)
 require(readxl)
 require(tidyverse)
 require(data.table)
 require(ggplot2)
 require(caret)
 require(lubridate)
+require(xgboost)
+require(klaR)
+require(rlang)
+require(mice)
 
 # Import 2017 Data -------------------------------------------------------------
 
@@ -67,8 +77,7 @@ nrow(data[Age >= 105])
 # Consumption
 summary(data[, Consumption])
 plot(data[, Consumption])
-
-max(data$Consumption)
+max(data$Consumption, na.rm= TRUE)
 
 # Payment on Account
 # Annual Account
@@ -78,7 +87,7 @@ max(data$Consumption)
 # Detect Percentage of NA's per feature
 
 apply(data, 2, function(col)sum(is.na(col))/length(col))
-
+md.pattern(data, plot= T)
 
 # Data Preparation --------------------------------------------------------
 
@@ -87,22 +96,47 @@ apply(data, 2, function(col)sum(is.na(col))/length(col))
 
 # Modeling ----------------------------------------------------------------
 
-myGrid = expand.grid(max_depth =c(5, 10, 15), nrounds =c(50,100), eta = 0.1, gamma = 1, min_child_weight = 2) # insert xgboost parameters here 
+# a) Naive Bayes
 
+model = train(Churn ~ ., data = data, method = "naive_bayes", trControl = myControl)
+
+plot(model)
+
+# b) Random Forest
+
+# c) Support Vector Machine
+
+# d) XGBoost
+myGrid = expand.grid(max_depth =c(5, 10, 15), nrounds =c(50,100), eta = 0.1, gamma = 1, min_child_weight = 2) # insert xgboost parameters here 
 
 myControl = trainControl(method = "cv", number = 10, summaryFunction = defaultSummary)
 
 model = train(Churn ~., data = data, method = "xgbTree", 
               trControl = myControl, tuneGrid = myGrid)
 
+# e) Catboost
 
-# eta [0.01 - 0.2]
-# max_depth [500]
-# min_child_weight 
+fit_control <- trainControl(method = "cv",
+                            number = 5,
+                            classProbs = TRUE)
 
-model = train(Churn ~ ., data = data, method = "naive_bayes", trControl = myControl)
+grid <- expand.grid(depth = c(4, 6, 8),
+                    learning_rate = 0.1,
+                    iterations = 100,
+                    l2_leaf_reg = 0.1,
+                    rsm = 0.95,
+                    border_count = 64)
 
-plot(model)
+model <- train(x, as.factor(make.names(y)),
+               method = catboost.caret,
+               logging_level = 'Silent', preProc = NULL,
+               tuneGrid = grid, trControl = fit_control)
+
+print(model)
+
+# f) Logistic Regression
+
+
 
 # Model Evaluation --------------------------------------------------------
 
