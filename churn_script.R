@@ -18,7 +18,7 @@ require(lubridate)
 
 # Import 2017 Data -------------------------------------------------------------
 
-# data_2017 = read_excel("Data\\Data January 2017.xlsx")
+# data_2017 = read_excel("Data/Data January 2017.xlsx")
 # write.csv(data_2017, "Data_January_2017.csv")
 
 # N
