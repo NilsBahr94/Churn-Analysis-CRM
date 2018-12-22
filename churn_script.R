@@ -143,6 +143,11 @@ data$Continuous_relationship = as.factor(data$Continuous_relationship)
 data$Digitally_savvy = ifelse(data$Online_account=="1" & data$Opt_In_Mail=="1" & data$Age <= 50, 1,0)
 data$Digitally_savvy = as.factor(data$Digitally_savvy)
 
+# Delete outliers/implausible observations
+nrow(subset(data,data$Customer_since>data$Contract_start_date))
+nrow(data)-nrow(subset(data,data$Customer_since>data$Contract_start_date))
+
+
 # Explore Data I ----------------------------------------------------------
 
 str(data)
