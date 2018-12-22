@@ -132,7 +132,16 @@ data$`International` = unlist(gregexpr("[0-9]{5}", data$`Zip_code`)) # Nochmal Ã
 data$`International`[data$`International` == 1] = 0
 data$`International`[data$`International` == -1] = 1
 
+#Create feature "annual payment"
 data$`Actual_payment` = data$Payment_on_account * 12 + data$Annual_account
+
+#Create feature "Continuous relationship"
+data$`Continuous_relationship` = ifelse(data$Contract_start_date==data$Customer_since, 1,0)
+data$Continuous_relationship = as.factor(data$Continuous_relationship)
+
+#Create feature "Digitally_savvy"
+data$Digitally_savvy = ifelse(data$Online_account=="1" & data$Opt_In_Mail=="1" & data$Age <= 50, 1,0)
+data$Digitally_savvy = as.factor(data$Digitally_savvy)
 
 # Explore Data I ----------------------------------------------------------
 
