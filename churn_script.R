@@ -11,6 +11,10 @@ install.packages("xgboost")
 install.packages("klaR")
 install.packages("rlang")
 install.packages("mice")
+install.packages("corrplot")
+install.packages("dplyr")
+install.packages("factoextra")
+
 
 # Load Packages ------------------------------------------------------------
 
@@ -25,6 +29,10 @@ require(xgboost)
 require(klaR)
 require(rlang)
 require(mice)
+require(corrplot)
+require(dplyr)
+require(factoextra)
+
 
 # Import 2017 Data -------------------------------------------------------------
 
@@ -147,14 +155,27 @@ data$Digitally_savvy = as.factor(data$Digitally_savvy)
 nrow(subset(data,data$Customer_since>data$Contract_start_date))
 nrow(data)-nrow(subset(data,data$Customer_since>data$Contract_start_date))
 
+# PCA ---------------------------------------------------------------------
+
+data_pca <- select_if(data, is.numeric)
+
+pca <- prcomp(na.omit(data_pca), center = TRUE, scale = TRUE)
+str(pca)
+summary(pca)
+fviz_eig(pca)
+fviz_pca_biplot(pca)
+biplot(pca)
+loadings(pca)
+pca$rotation
+cor(data$age,data$Duration_of_customer_relationship)
 
 # Explore Data I ----------------------------------------------------------
 
 str(data)
 summary(data)
 
-summary(data[`Client type`=="1", .(`Client type`, Age)])
 
+summary(data[`Client type`=="1", .(`Client type`, Age)])
 
 # Explore numerical features, detect outliers
 
@@ -224,7 +245,19 @@ print(model)
 
 # f) Logistic Regression
 
+# define training control
+train_control <- trainControl(method = "cv", number = 5)
 
+# train the model on training set
+model <- train(Churn ~ Client_type + Duration_of_customer_relationship,
+               data = data,
+               trControl = train_control,
+               method = "glm",
+               na.action = na.pass,
+               family=binomial())
+
+# print cv scores
+summary(model)
 
 # Model Evaluation --------------------------------------------------------
 
