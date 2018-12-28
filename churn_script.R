@@ -150,6 +150,19 @@ data$DBII = as.numeric(gsub(",", ".", gsub("\\.", "", data$DBII)))
 data$Customer_since_interval = as.integer(data$Customer_since_interval)
 data$Contract_start_date_interval = as.integer(data$Contract_start_date_interval)
 
+#At 51 observations "Customer_since" starts later than "Contract start date" --> Replace "Customer_since" by "Contract_start_date"  
+nrow(subset(data,data$Customer_since>data$Contract_start_date)) 
+data$Customer_since <- if_else(data$Customer_since>data$Contract_start_date, data$Contract_start_date, data$Customer_since)
+
+#If "Contract_start_date"==NA, insert "Customer_since" as "Contract_start_date"
+data$Contract_start_date <- if_else(is.na(data$Contract_start_date), data$Customer_since, data$Contract_start_date)
+
+#If "Customer_since"==NA, calculate "Customer_since" based on "Duration_of_customer_relationship"
+data$Customer_since <- if_else(is.na(data$Customer_since),ymd(20170301)- months(data$Duration_of_customer_relationship),data$Customer_since)
+
+#At 4 observations, the contract starts later than 2017-01-01 --> Delete cases
+nrow(subset(data, data$Customer_since <= ymd(20170101)))
+data <- subset(data, data$Customer_since <= ymd(20170101))
 
 # Feature Selection & Engineering -------------------------------------------------------------
 
@@ -168,10 +181,6 @@ data$Continuous_relationship = as.factor(data$Continuous_relationship)
 #Create feature "Digitally_savvy"
 data$Digitally_savvy = ifelse(data$Online_account=="1" & data$Opt_In_Mail=="1" & data$Age <= 50, 1,0) # 81 cases und alle Nicht-Churner 
 data$Digitally_savvy = as.factor(data$Digitally_savvy)
-
-# Delete outliers/implausible observations
-nrow(subset(data,data$Customer_since>data$Contract_start_date)) #51, kann eventuell auch ein Fehler sein, Customer since sollte früher als start date sein
-nrow(data)-nrow(subset(data,data$Customer_since>data$Contract_start_date))
 
 # PCA ---------------------------------------------------------------------
 
