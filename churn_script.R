@@ -14,11 +14,12 @@ install.packages("mice")
 install.packages("corrplot")
 install.packages("dplyr")
 install.packages("factoextra")
+install.packages("lattice")
+install.packages("VIM")
 
 
 # Load Packages ------------------------------------------------------------
 
-require(tidyverse)
 require(readxl)
 require(tidyverse)
 require(data.table)
@@ -32,18 +33,27 @@ require(mice)
 require(corrplot)
 require(dplyr)
 require(factoextra)
+require(lattice)
+require(VIM)
 
 
 # Import 2017 Data -------------------------------------------------------------
 
-# data_2017 = read_excel("Data/Data January 2017.xlsx", na = "-")
-# write.csv(data_2017, "Data_January_2017.csv")
-
 # N
-data = fread("Data\\Data_January_2017.csv", na.strings = "NA")
+# data_2017 = read_excel("Data\\Data January 2017.xlsx", na = "-")
+# write.csv(data_2017, "Data\\Data_January_2017.csv")
+
+# # L
+# data_2017 = read_excel("Data/Data January 2017.xlsx", na = "-")
+# write.csv(data_2017, "Data/Data_January_2017.csv")
 
 # L
-data = fread("Data/Data_January_2017.csv", na.strings = "NA")
+original_data = fread("Data/Data_January_2017.csv", na.strings = "NA")
+data = original_data
+
+# N
+original_data = fread("Data\\Data_January_2017.csv", na.strings = "-")
+data = original_data
 
 #remove title and V1 from the data set
 data = data[,c("Contract_ID", 
@@ -70,6 +80,7 @@ data = data[,c("Contract_ID",
                "Churn")]
 
 #rename cols in order to avoid problems with imputation
+
 names(data)[names(data) == 'Client type'] <- 'Client_type' # Customer since, Notice Period, Automatic Contract extension
 names(data)[names(data) == 'Zip code'] <- 'Zip_code'
 names(data)[names(data) == 'Duration of customer relationship'] <- 'Duration_of_customer_relationship'  
@@ -88,11 +99,18 @@ names(data)[names(data) == 'Opt In Tel'] <- 'Opt_In_Tel'
 names(data)[names(data) == 'Market area'] <- 'Market_area'
 
 # Online Account - NA to 0 
-data$`Online_account`[is.na(data$`Online_account`)] = 0
+# unique(data$Online_account)
+# data$Online_account = as.factor(data$Online_account)
+summary(data$Online_account)
+# data$Online_account = as.integer(data$Online_account)
+
+data$Online_account[is.na(data$Online_account)] = "0"  # Does not work, still NA's
+data$Online_account = replace(data$Online_account, is.na(data$Online_account), "0")
+data$Online_account = ifelse(is.na(data$Online_account), 0, data$Online_account)
 
 # Recovered - "" to 0 and "X" to 1
-data$Recovered[data$`Recovered`=="X"] = 1
-data$`Recovered`[is.na(data$`Recovered`)] = 0
+data$Recovered[data$`Recovered`=="X"] = "1"
+data$`Recovered`[is.na(data$`Recovered`)] = "0" # Does also not work
 
 #Transform "Customer_since" to number of months
 data$`Customer_since` = ymd(data$`Customer_since`)
@@ -133,7 +151,7 @@ data$Customer_since_interval = as.integer(data$Customer_since_interval)
 data$Contract_start_date_interval = as.integer(data$Contract_start_date_interval)
 
 
-# Feature engineering -------------------------------------------------------------
+# Feature Selection & Engineering -------------------------------------------------------------
 
 #Create feature "international"
 data$`International` = unlist(gregexpr("[0-9]{5}", data$`Zip_code`)) # Nochmal überprüfen, kurze PLZ müssen nicht unbedingt im Ausland sein
@@ -169,7 +187,7 @@ loadings(pca)
 pca$rotation
 cor(data$age,data$Duration_of_customer_relationship)
 
-# Explore Data I ----------------------------------------------------------
+# Data Exploration ----------------------------------------------------------
 
 str(data)
 summary(data)
@@ -197,16 +215,20 @@ max(data$Consumption, na.rm= TRUE)
 # Payment on Account
 # Annual Account
 
-# Clean Data --------------------------------------------------------------
+# Data Cleaning --------------------------------------------------------------
+
+# Missing Values
 
 # Detect Percentage of NA's per feature
-
 apply(data, 2, function(col)sum(is.na(col))/length(col))
 md.pattern(data, plot= T)
+md.pairs(data)
 
 # Imputation
-# Multiple Imputation 
 
+
+# Multiple Imputation 
+imp_data = mice(data, m=5) # Fehlermeldung wg. nicht installiertem lattice package
 
 
 # Data Preparation --------------------------------------------------------
@@ -214,13 +236,17 @@ md.pattern(data, plot= T)
 # Customers older than 105 years
 
 
-# Modeling ----------------------------------------------------------------
+# Quick & Dirty Modeling ----------------------------------------------------------------
 
 # Try Data Partitioning in case CV did not work
 set.seed(42)
 index <- createDataPartition(data$V1, p = 0.7, list = FALSE)
 train_data <- data[index, ]
 test_data  <- data[-index, ]
+
+
+
+# Extensive Modeling --------------------------------------------------------
 
 # a) Naive Bayes
 
@@ -275,10 +301,6 @@ model <- train(Churn ~ Client_type + Duration_of_customer_relationship,
 
 # print cv scores
 summary(model)
-
-# Model Evaluation --------------------------------------------------------
-
-confusionMatrix()
 
 
 # Import 2018 Data ----------------------------------------------------------------
