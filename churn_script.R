@@ -148,11 +148,11 @@ data$`Continuous_relationship` = ifelse(data$Contract_start_date==data$Customer_
 data$Continuous_relationship = as.factor(data$Continuous_relationship)
 
 #Create feature "Digitally_savvy"
-data$Digitally_savvy = ifelse(data$Online_account=="1" & data$Opt_In_Mail=="1" & data$Age <= 50, 1,0)
+data$Digitally_savvy = ifelse(data$Online_account=="1" & data$Opt_In_Mail=="1" & data$Age <= 50, 1,0) # 81 cases und alle Nicht-Churner 
 data$Digitally_savvy = as.factor(data$Digitally_savvy)
 
 # Delete outliers/implausible observations
-nrow(subset(data,data$Customer_since>data$Contract_start_date))
+nrow(subset(data,data$Customer_since>data$Contract_start_date)) #51, kann eventuell auch ein Fehler sein, Customer since sollte früher als start date sein
 nrow(data)-nrow(subset(data,data$Customer_since>data$Contract_start_date))
 
 # PCA ---------------------------------------------------------------------
@@ -174,10 +174,16 @@ cor(data$age,data$Duration_of_customer_relationship)
 str(data)
 summary(data)
 
-
 summary(data[`Client type`=="1", .(`Client type`, Age)])
 
+# Correlation Plot
+
+# Churn Distribution Plot 
+# Categorical features 
+# Numerical features
+
 # Explore numerical features, detect outliers
+# Kriterium gut begründen
 
 # Age
 # Check Age feature 
@@ -198,12 +204,23 @@ max(data$Consumption, na.rm= TRUE)
 apply(data, 2, function(col)sum(is.na(col))/length(col))
 md.pattern(data, plot= T)
 
+# Imputation
+# Multiple Imputation 
+
+
+
 # Data Preparation --------------------------------------------------------
 
 # Customers older than 105 years
 
 
 # Modeling ----------------------------------------------------------------
+
+# Try Data Partitioning in case CV did not work
+set.seed(42)
+index <- createDataPartition(data$V1, p = 0.7, list = FALSE)
+train_data <- data[index, ]
+test_data  <- data[-index, ]
 
 # a) Naive Bayes
 
