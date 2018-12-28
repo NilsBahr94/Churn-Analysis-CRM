@@ -3,6 +3,7 @@
 install.packages("tidyverse")
 install.packages("readxl")
 install.packages("tidyverse")
+install.packages("dplyr")
 install.packages("data.table")
 install.packages("ggplot2")
 install.packages("caret")
@@ -16,12 +17,14 @@ install.packages("dplyr")
 install.packages("factoextra")
 install.packages("lattice")
 install.packages("VIM")
+install.packages("purrr")
 
 
 # Load Packages ------------------------------------------------------------
 
 require(readxl)
 require(tidyverse)
+require(dplyr)
 require(data.table)
 require(ggplot2)
 require(caret)
@@ -35,6 +38,7 @@ require(dplyr)
 require(factoextra)
 require(lattice)
 require(VIM)
+require(purrr)
 
 
 # Import 2017 Data -------------------------------------------------------------
@@ -52,7 +56,7 @@ original_data = fread("Data/Data_January_2017.csv", na.strings = "NA")
 data = original_data
 
 # N
-original_data = fread("Data\\Data_January_2017.csv", na.strings = "-")
+original_data = fread("Data\\Data_January_2017.csv", na.strings = "NA")
 data = original_data
   
   #remove title and V1 from the data set
@@ -102,17 +106,11 @@ data = original_data
 # Data Preparation --------------------------------------------------------
   
 # Online Account - NA to 0 
-data[,.N,by=Online_account]
-data$Online_account = as.character(as.integer(data$Online_account))
 data$Online_account[is.na(data$Online_account)] = 0
-data[,.N,by=Online_account] 
 
 # Recovered - "" to 0 and "X" to 1
-data[,.N,by=Recovered]
-data$Recovered[data$`Recovered`=="X"] = "1"
-data$Recovered = as.character(as.integer(data$Recovered))
+data$Recovered[data$`Recovered`=="X"] = 1
 data$Recovered[is.na(data$`Recovered`)] = 0
-data[,.N,by=Recovered]
 
 #Transform "Customer_since" to number of months
 data$`Customer_since` = ymd(data$`Customer_since`) # failed to parse bei wenigen - wahrscheinlich nicht im ymd Format
@@ -126,12 +124,6 @@ data$`Contract_start_date_interval` = interval(ymd(data$`Contract_start_date`), 
 data$`MA_Grundversorger` = unlist(lapply(data$Market_area, FUN = function(x) ifelse(x=="Grundversorger",1,0)))
 data$`MA_Erweitert` = unlist(lapply(data$Market_area, FUN = function(x) ifelse(x=="Erweitertes Netzgebiet",1,0)))
 data$`MA_Restlich` = unlist(lapply(data$Market_area, FUN = function(x) ifelse(x=="Restliches Bundesgebiet",1,0)))
-
-# Insert actual NAs
-data$Age[data$Age == "NA"] = NA
-data$Consumption[data$Consumption == "NA"] = NA
-data$Payment_on_account[data$Payment_on_account == "NA"] = NA
-data$DBII[data$DBII == "NA"] = NA
 
 ## Feature Conversion
 #Convert features into right data types
@@ -176,11 +168,11 @@ data$Customer_since <- if_else(is.na(data$Customer_since),ymd(20170301)- months(
 nrow(subset(data, data$Customer_since <= ymd(20170101)))
 data <- subset(data, data$Customer_since <= ymd(20170101))
 
-# Feature Selection & Engineering -------------------------------------------------------------
+# Feature Engineering -------------------------------------------------------------
 
 # Create feature "not_opted" 
 # data[Opt_In_Mail == "0" & Opt_In_Post == "0" & Opt_In_Tel == "0", .N, by= Churn] 
-#However, only non-churners have this combination, therefore new feature would not be meaningful
+#However, only non-churners have this combination, therefore this new feature would not be meaningful
 
 #Create feature "international"
 data$`International` = unlist(gregexpr("[0-9]{5}", data$`Zip_code`)) # Nochmal überprüfen, kurze PLZ müssen nicht unbedingt im Ausland sein
@@ -195,29 +187,43 @@ data$`Continuous_relationship` = ifelse(data$Contract_start_date==data$Customer_
 data$Continuous_relationship = as.factor(data$Continuous_relationship)
 
 #Create feature "Digitally_savvy"
-data$Digitally_savvy = ifelse(data$Online_account=="1" & data$Opt_In_Mail=="1" & data$Age <= 50, 1,0) # 81 cases und alle Nicht-Churner 
-data$Digitally_savvy = as.factor(data$Digitally_savvy)
+# data$Digitally_savvy = ifelse(data$Online_account=="1" & data$Opt_In_Mail=="1" & data$Age <= 50, 1,0) # 81 cases und alle Nicht-Churner 
+# data$Digitally_savvy = as.factor(data$Digitally_savvy)
+# data[Online_account == "1" & Opt_In_Mail == "1", .N, by = Churn] # Ebenfalls alle nicht Churner, wenn Age rausgenommen
 
-# Data Cleaning --------------------------------------------------------------
-
-# Missing Values
+# Imputation for Missing Values --------------------------------------------------------------
 
 # Detect Percentage of NA's per feature
 apply(data, 2, function(col)sum(is.na(col))/length(col))
 md.pattern(data, plot= T)
 md.pairs(data)
 
-# Imputation
-
-
 # Multiple Imputation 
 imp_data = mice(data, m=5) # Fehlermeldung wg. nicht installiertem lattice package
 
 
+# Outlier  ----------------------------------------------------------------
 
+# Outlier Detection & Elimination
 
+## Age
 # Customers older than 105 years
+data[Age >= 105, .N, by = Churn] # 14 Customers are 105 years old or older 
+# Customers younger than 18 years
+data[Age < 18, .N, by = Churn] # 9 Customers are younger than 18 years 
+# Set to NA, since we interprete these factors as not meaningful
+data[Age >= 105] = NA
+data[Age >= 105] = NA
 
+
+# Consumption
+summary(data[, Consumption])
+plot(data[, Consumption])
+max(data$Consumption, na.rm= TRUE)
+data[Consumption > 30000, .N, by = Client_type] # important to clarify what is really meant by consumption - counter reading at a given point in time which also factors in the consumption of the past years or really the consumption for a given time horizon by a single customer
+
+# Payment on Account
+# Annual Account
 
 
 # PCA ---------------------------------------------------------------------
@@ -239,7 +245,7 @@ cor(data$age,data$Duration_of_customer_relationship)
 str(data)
 summary(data)
 
-summary(data[`Client type`=="1", .(`Client type`, Age)])
+summary(data[Client_type=="1", .(Client_type, Age)])
 
 # Correlation Plot
 
@@ -250,20 +256,8 @@ summary(data[`Client type`=="1", .(`Client type`, Age)])
 # Explore numerical features, detect outliers
 # Kriterium gut begründen
 
-# Age
-# Check Age feature 
-nrow(data[Age < 18])
-nrow(data[Age >= 105])
-# Consumption
-summary(data[, Consumption])
-plot(data[, Consumption])
-max(data$Consumption, na.rm= TRUE)
 
-# Payment on Account
-# Annual Account
-
-
-# Final Features ----------------------------------------------------------
+# Final Feature Dataset ----------------------------------------------------------
 
 
 
