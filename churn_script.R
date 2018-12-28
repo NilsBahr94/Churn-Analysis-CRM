@@ -98,19 +98,18 @@ data = original_data
   names(data)[names(data) == 'Opt In Tel'] <- 'Opt_In_Tel'
   names(data)[names(data) == 'Market area'] <- 'Market_area'
 
-
 # Online Account - NA to 0 
 data[,.N,by=Online_account]
-data$Online_account = as.integer(data$Online_account)
-data$Online_account[is.na(data$Online_account)] = 0  
-data[,.N,by=Online_account] # Conversion does finally work
+data$Online_account = as.character(as.integer(data$Online_account))
+data$Online_account[is.na(data$Online_account)] = 0
+data[,.N,by=Online_account] 
 
 # Recovered - "" to 0 and "X" to 1
 data[,.N,by=Recovered]
 data$Recovered[data$`Recovered`=="X"] = "1"
-data$Recovered[is.na(data$`Recovered`)] = "0" # Conversion does not work
+data$Recovered = as.character(as.integer(data$Recovered))
+data$Recovered[is.na(data$`Recovered`)] = 0
 data[,.N,by=Recovered]
-
 
 #Transform "Customer_since" to number of months
 data$`Customer_since` = ymd(data$`Customer_since`)
