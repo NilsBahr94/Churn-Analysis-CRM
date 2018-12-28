@@ -98,6 +98,9 @@ data = original_data
   names(data)[names(data) == 'Opt In Tel'] <- 'Opt_In_Tel'
   names(data)[names(data) == 'Market area'] <- 'Market_area'
 
+
+# Data Preparation --------------------------------------------------------
+  
 # Online Account - NA to 0 
 data[,.N,by=Online_account]
 data$Online_account = as.character(as.integer(data$Online_account))
@@ -112,7 +115,7 @@ data$Recovered[is.na(data$`Recovered`)] = 0
 data[,.N,by=Recovered]
 
 #Transform "Customer_since" to number of months
-data$`Customer_since` = ymd(data$`Customer_since`)
+data$`Customer_since` = ymd(data$`Customer_since`) # failed to parse bei wenigen - wahrscheinlich nicht im ymd Format
 data$`Customer_since_interval` = interval(ymd(data$`Customer_since`), ymd(20170201)) %/% months(1)
 
 #Transform "Contract_start_date" to number of months
@@ -120,10 +123,17 @@ data$`Contract_start_date` = ymd(data$`Contract_start_date`)
 data$`Contract_start_date_interval` = interval(ymd(data$`Contract_start_date`), ymd(20170201)) %/% months(1)
 
 #Transform "Market area" to binary variables
-data$`Grundversorger` = unlist(lapply(data$`Market area`, FUN = function(x) ifelse(x=="Grundversorger",1,0) ))
-data$`Erweitert` = unlist(lapply(data$`Market area`, FUN = function(x) ifelse(x=="Erweitertes Netzgebiet",1,0) ))
-data$`Restlich` = unlist(lapply(data$`Market area`, FUN = function(x) ifelse(x=="Restliches Bundesgebiet",1,0) ))
+data$`MA_Grundversorger` = unlist(lapply(data$Market_area, FUN = function(x) ifelse(x=="Grundversorger",1,0)))
+data$`MA_Erweitert` = unlist(lapply(data$Market_area, FUN = function(x) ifelse(x=="Erweitertes Netzgebiet",1,0)))
+data$`MA_Restlich` = unlist(lapply(data$Market_area, FUN = function(x) ifelse(x=="Restliches Bundesgebiet",1,0)))
 
+# Insert actual NAs
+data$Age[data$Age == "NA"] = NA
+data$Consumption[data$Consumption == "NA"] = NA
+data$Payment_on_account[data$Payment_on_account == "NA"] = NA
+data$DBII[data$DBII == "NA"] = NA
+
+## Feature Conversion
 #Convert features into right data types
 data$Contract_ID = as.character(data$Contract_ID)
 data$`Zip_code` = as.character(data$`Zip_code`)
@@ -140,14 +150,17 @@ data$`Online_account` = as.factor(data$`Online_account`)
 data$`Opt_In_Mail` = as.factor(data$`Opt_In_Mail`)
 data$`Opt_In_Post` = as.factor(data$`Opt_In_Post`)
 data$`Opt_In_Tel` = as.factor(data$`Opt_In_Tel`)
-data$`Grundversorger` = as.factor(data$`Grundversorger`)
-data$`Erweitert` = as.factor(data$`Erweitert`)
-data$`Restlich` = as.factor(data$`Restlich`)
+data$`MA_Grundversorger` = as.factor(data$`MA_Grundversorger`)
+data$`MA_Erweitert` = as.factor(data$`MA_Erweitert`)
+data$`MA_Restlich` = as.factor(data$`MA_Restlich`)
 data$Recovered = as.factor(data$Recovered)
 data$Churn = as.factor(data$Churn)
 data$DBII = as.numeric(gsub(",", ".", gsub("\\.", "", data$DBII)))
 data$Customer_since_interval = as.integer(data$Customer_since_interval)
 data$Contract_start_date_interval = as.integer(data$Contract_start_date_interval)
+
+
+## Modifications
 
 #At 51 observations "Customer_since" starts later than "Contract start date" --> Replace "Customer_since" by "Contract_start_date"  
 nrow(subset(data,data$Customer_since>data$Contract_start_date)) 
@@ -165,6 +178,10 @@ data <- subset(data, data$Customer_since <= ymd(20170101))
 
 # Feature Selection & Engineering -------------------------------------------------------------
 
+# Create feature "not_opted" 
+# data[Opt_In_Mail == "0" & Opt_In_Post == "0" & Opt_In_Tel == "0", .N, by= Churn] 
+#However, only non-churners have this combination, therefore new feature would not be meaningful
+
 #Create feature "international"
 data$`International` = unlist(gregexpr("[0-9]{5}", data$`Zip_code`)) # Nochmal überprüfen, kurze PLZ müssen nicht unbedingt im Ausland sein
 data$`International`[data$`International` == 1] = 0
@@ -180,6 +197,28 @@ data$Continuous_relationship = as.factor(data$Continuous_relationship)
 #Create feature "Digitally_savvy"
 data$Digitally_savvy = ifelse(data$Online_account=="1" & data$Opt_In_Mail=="1" & data$Age <= 50, 1,0) # 81 cases und alle Nicht-Churner 
 data$Digitally_savvy = as.factor(data$Digitally_savvy)
+
+# Data Cleaning --------------------------------------------------------------
+
+# Missing Values
+
+# Detect Percentage of NA's per feature
+apply(data, 2, function(col)sum(is.na(col))/length(col))
+md.pattern(data, plot= T)
+md.pairs(data)
+
+# Imputation
+
+
+# Multiple Imputation 
+imp_data = mice(data, m=5) # Fehlermeldung wg. nicht installiertem lattice package
+
+
+
+
+# Customers older than 105 years
+
+
 
 # PCA ---------------------------------------------------------------------
 
@@ -223,25 +262,10 @@ max(data$Consumption, na.rm= TRUE)
 # Payment on Account
 # Annual Account
 
-# Data Cleaning --------------------------------------------------------------
 
-# Missing Values
-
-# Detect Percentage of NA's per feature
-apply(data, 2, function(col)sum(is.na(col))/length(col))
-md.pattern(data, plot= T)
-md.pairs(data)
-
-# Imputation
+# Final Features ----------------------------------------------------------
 
 
-# Multiple Imputation 
-imp_data = mice(data, m=5) # Fehlermeldung wg. nicht installiertem lattice package
-
-
-# Data Preparation --------------------------------------------------------
-
-# Customers older than 105 years
 
 
 # Quick & Dirty Modeling ----------------------------------------------------------------
