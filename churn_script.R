@@ -20,13 +20,11 @@ install.packages("VIM")
 install.packages("purrr")
 install.packages("corrplot")
 install.packages("gplots")
-install.packages("lime")
 install.packages("rsample")
 install.packages("yardstick")
 install.packages("ggthemes")
 install.packages("e1071")
 install.packages("MLmetrics")
-# install_keras()
 install.packages("ISLR")
 install.packages("randomForest")
 
@@ -54,8 +52,6 @@ require(corrplot)
 require(gplots)
 library(readr)     # for fast reading of input files
 library(mice)      # mice package for Multivariate Imputation by Chained Equations (MICE)
-library(keras)     # for neural nets
-library(lime)      # for explaining neural nets
 library(rsample)   # for splitting training and test data
 library(recipes)   # for preprocessing
 library(yardstick) # for evaluation
@@ -207,6 +203,9 @@ data$`International` = unlist(gregexpr("[0-9]{5}", data$`Zip_code`)) # Nochmal Ã
 data$`International`[data$`International` == 1] = 0
 data$`International`[data$`International` == -1] = 1
 
+data[ International == 1, .N, by = MA_Erweitert] # Auch checken, ob erweiterten Netzgebiet
+data[ International == 1, .N, by = MA_Restlich] 
+
 #Create feature "annual payment"
 data$`Actual_payment` = data$Payment_on_account * 12 + data$Annual_account
 
@@ -215,7 +214,7 @@ data$`Continuous_relationship` = ifelse(data$Contract_start_date==data$Customer_
 data$Continuous_relationship = as.factor(data$Continuous_relationship)
 
 #Create feature "Digitally_savvy"
-# data$Digitally_savvy = ifelse(data$Online_account=="1" & data$Opt_In_Mail=="1" & data$Age <= 50, 1,0) # 81 cases und alle Nicht-Churner 
+# data$Digitally_savvy = ifelse(data$Online_account=="1" & data$Opt_In_Mail=="1" & data$Age <= 50, 1,0) # 81 cases und alle Nicht-Churner
 # data$Digitally_savvy = as.factor(data$Digitally_savvy)
 # data[Online_account == "1" & Opt_In_Mail == "1", .N, by = Churn] # Ebenfalls alle nicht Churner, wenn Age rausgenommen
 
@@ -271,9 +270,11 @@ data[Actual_payment > 1000000000] # Actual Payment is too high, this must be a f
 data[Actual_payment > 1000000000, .N]
 data[Contract_ID == "3018420", .N]
 
+# To Do Eliminate
+
 # Very low Payments
 data[Actual_payment < -100000] # does that make sense?
-data[Actual_payment < -100000, .N] 
+data[Actual_payment < -100000, .N, by = Churn] 
 
 # Filter out observation with unreasonably high and low Actual Payment
 # data = data[Actual_payment < 10000000000 & Actual_payment > -100000]
@@ -320,8 +321,6 @@ corrplot.mixed(corr=cor(data[, .(Age,
                tl.pos="lt")
 
 
-data %>% select_if(is.character)
-
 # Churn Distribution for Categorical Features
 data %>%
   select(-Age, 
@@ -332,8 +331,7 @@ data %>%
          -DBII, 
          -Minimum_contract_term, 
          -Customer_since_interval,
-         -Contract_start_date_interval) %>% 
-  select_if(is.character | is.factor) %>%
+         -Contract_start_date_interval)  %>%
   select(Churn, everything()) %>%
   gather(x, y, gender:PaymentMethod) %>%
   count(Churn, x, y) %>%
@@ -344,8 +342,6 @@ data %>%
         legend.position = "top") +
   scale_color_tableau() +
   scale_fill_tableau()
-
-
 
 
 # Churn Distribution for Continous Features 
@@ -412,7 +408,7 @@ ggplot(data= data[complete.cases(data) & Consumption <= 10000], aes(x=Churn, y= 
 
 # First do simple Training / Test Split
 set.seed(456) 
-smp_siz = floor(0.70*nrow(data)) 
+smp_siz = floor(0.70*nrow(data)) # 70% of data for training, 30% for testing
 train_ind = sample(seq_len(nrow(data)), size = smp_siz) 
 train_data=data[train_ind,]
 test_data=data[-train_ind,]  
@@ -451,13 +447,15 @@ get_model_performance(predict_variable = nb_pred, y_reference = test_data$Churn)
 randomForest(Churn ~ ., data=train_data, ntree = 300)
 
 
-
-
 # Extensive Modeling --------------------------------------------------------
 
 # a) Naive Bayes -------------------
 
-model = train(Churn ~ ., data = data, method = "naive_bayes", trControl = myControl)
+myControl = trainControl(method = "cv",
+                         number = 5,
+                         classProbs = TRUE)
+
+model = train(Churn ~ ., data = data, method = "naive_bayes", trControl = myControl, na.action = na.pass)
 
 plot(model)
 
