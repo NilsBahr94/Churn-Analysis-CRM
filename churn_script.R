@@ -28,6 +28,8 @@ install.packages("e1071")
 install.packages("MLmetrics")
 # install_keras()
 install.packages("ISLR")
+install.packages("randomForest")
+
 
 # Load Packages ------------------------------------------------------------
 
@@ -61,6 +63,7 @@ library(ggthemes)  # for additional plotting themes
 library(e1071)
 library(MLmetrics)
 library(ISLR)
+library(randomForest)
 
 
 # Import 2017 Data -------------------------------------------------------------
@@ -416,10 +419,16 @@ test_data=data[-train_ind,]
 
 # 1) Naive Bayes ----------------------------------------------------------
 
-nb_classifier = naiveBayes(Churn ~ . , data = train_set, laplace=1)
-nb_pred = predict(nb_classifier, newdata = test_set[-22])
+nb_classifier = naiveBayes(Churn ~ . , data = train_data, laplace=1)
+nb_pred = predict(nb_classifier, newdata = test_data[-22])
+test_data$Churn_pred = predict(nb_classifier, newdata = test_data[-22])
+# test_data[, .N, by = Churn]
+# test_data[, .N, by = Churn_pred]
 
-get_model_performance = function (predict_variable, y_reference = test_set$is_attributed){
+ConfusionMatrix(y_pred = nb_pred, y_true=test_data$Churn) # nicht die selbe length: "Supplied 21683 items to be assigned to 21684 items of column 'Churn_pred' (recycled leaving remainder of 1 items)."
+
+
+get_model_performance = function (predict_variable, y_reference = test_data$Churn){
   require(MLmetrics)
   require(caret)
   
@@ -433,44 +442,45 @@ get_model_performance = function (predict_variable, y_reference = test_set$is_at
   print(list(Table_Predictions=Table_Predictions, Confusion_Matrix=Confusion_Matrix, Precision_Score=Precision_Score, Recall_Score=Recall_Score, F1=F1, Accuracy_Score=Accuracy_Score))
 }
 
+get_model_performance(predict_variable = nb_pred, y_reference = test_data$Churn)
+
+
 
 # 2) Random Forest --------------------------------------------------------
 
+randomForest(Churn ~ ., data=train_data, ntree = 300)
 
 
-# 3) XGBoost --------------------------------------------------------------
 
-train_data = train_data[, -19]
-test_data = test_data[, -19]
 
-train_data$Churn = as.character(train_data$Churn)
-train_data$Churn[train_data$Churn == "No"] = "0"
-train_data$Churn[train_data$Churn == "Yes"] = "1"
-train_data$Churn = as.numeric(train_data$Churn)
+# Extensive Modeling --------------------------------------------------------
 
-train_data = as.matrix(train_data)
-train_data = xgb.DMatrix(train_data)
+# a) Naive Bayes -------------------
 
-xgboost <- xgboost(data = as.matrix(train_data[, -21]), 
-           label = as.numeric(train_data$Churn),
-           max_depth = 3, 
-           objective = "binary:logistic", 
-           nrounds = 10, 
-           verbose = FALSE,
-           prediction = TRUE)
+model = train(Churn ~ ., data = data, method = "naive_bayes", trControl = myControl)
+
+plot(model)
+
+# b) Random Forest -------------------
+
+# c) Support Vector Machine -------------------
+
+# d) XGBoost -------------------
+
+# train_data = train_data[, -19]
+# test_data = test_data[, -19]
+# 
+# train_data$Churn = as.character(train_data$Churn)
+# train_data$Churn[train_data$Churn == "No"] = "0"
+# train_data$Churn[train_data$Churn == "Yes"] = "1"
+# train_data$Churn = as.numeric(train_data$Churn)
+# 
+# train_data = as.matrix(train_data)
+# train_data = xgb.DMatrix(train_data)
 
 params <- list(booster = "gbtree", objective = "binary:logistic", eta=0.3, gamma=0, max_depth=6, min_child_weight=1, subsample=1, colsample_bytree=1)
 
-xgbcv <- xgb.cv( params = params, data = as.matrix(train_data), nrounds = 100, nfold = 5, showsd = T, stratified = T, print_every_n = 10, early_stop_round = 20, maximize = F)
-
-# xgboost_training <- xgb.cv(data = as.matrix(train_data), 
-#                            label = train_data$Churn,
-#                            booster = "dart", 
-#                            objective = "binary:logistic", 
-#                            eta = 0.3,
-#                            sample_type = "weighted", 
-#                            nfold = 5,
-#                            nrounds = 100)
+xgbcv <- xgb.cv( params = params, data = as.matrix(train_data), nrounds = 100, nfold = 5)
 
 # Get the evaluation log 
 elog <- as.data.frame(xgboost_training$evaluation_log)
@@ -486,12 +496,9 @@ set.seed(123)
 ntrees_train <- number_trees$ntrees.train
 ntrees_test <- number_trees$ntrees.test
 
-
 # Train XGBoost Model 
-
-# Run xgboost
 xgb_model <- xgboost(data = as.matrix(train_data), # training data as matrix
-                     label = training_data$y,  # column of outcomes
+                     label = train_data$Churn,  # column of outcomes
                      nrounds = ntrees_train,   # number of trees to build
                      objective = "binary:logistic", # objective
                      # the higher, the lower the rmse
@@ -499,37 +506,13 @@ xgb_model <- xgboost(data = as.matrix(train_data), # training data as matrix
                      verbose = 0,  # silent,
                      eval_metric="error",
                      # set booster from default (="gbtree") to "dart" to enable further parameter config
-                     booster = "dart",
+                     booster = "gbtree",
                      sample_type = "weighted")
 
-
-# Predict on the Training Data to check RMSE 
-
-# Make predictions on Training Data 
+# Predict on the Training Data 
 training_data$pred <- predict(xgb_model, newdata=as.matrix(train_data[,-21]))
 
-
-# Extensive Modeling --------------------------------------------------------
-
-# a) Naive Bayes
-
-model = train(Churn ~ ., data = data, method = "naive_bayes", trControl = myControl)
-
-plot(model)
-
-# b) Random Forest
-
-# c) Support Vector Machine
-
-# d) XGBoost
-myGrid = expand.grid(max_depth =c(5, 10, 15), nrounds =c(50,100), eta = 0.1, gamma = 1, min_child_weight = 2) # insert xgboost parameters here 
-
-myControl = trainControl(method = "cv", number = 10, summaryFunction = defaultSummary)
-
-model = train(Churn ~., data = data, method = "xgbTree", 
-              trControl = myControl, tuneGrid = myGrid)
-
-# e) Catboost
+# e) Catboost -------------------
 
 fit_control <- trainControl(method = "cv",
                             number = 5,
