@@ -18,7 +18,16 @@ install.packages("factoextra")
 install.packages("lattice")
 install.packages("VIM")
 install.packages("purrr")
-
+install.packages("corrplot")
+install.packages("gplots")
+install.packages("lime")
+install.packages("rsample")
+install.packages("yardstick")
+install.packages("ggthemes")
+install.packages("e1071")
+install.packages("MLmetrics")
+# install_keras()
+install.packages("ISLR")
 
 # Load Packages ------------------------------------------------------------
 
@@ -39,6 +48,19 @@ require(factoextra)
 require(lattice)
 require(VIM)
 require(purrr)
+require(corrplot)
+require(gplots)
+library(readr)     # for fast reading of input files
+library(mice)      # mice package for Multivariate Imputation by Chained Equations (MICE)
+library(keras)     # for neural nets
+library(lime)      # for explaining neural nets
+library(rsample)   # for splitting training and test data
+library(recipes)   # for preprocessing
+library(yardstick) # for evaluation
+library(ggthemes)  # for additional plotting themes
+library(e1071)
+library(MLmetrics)
+library(ISLR)
 
 
 # Import 2017 Data -------------------------------------------------------------
@@ -146,6 +168,9 @@ data$`MA_Grundversorger` = as.factor(data$`MA_Grundversorger`)
 data$`MA_Erweitert` = as.factor(data$`MA_Erweitert`)
 data$`MA_Restlich` = as.factor(data$`MA_Restlich`)
 data$Recovered = as.factor(data$Recovered)
+data$Churn = as.character(data$Churn)
+data$Churn[data$Churn == "0"] = "No"
+data$Churn[data$Churn == "1"] = "Yes"
 data$Churn = as.factor(data$Churn)
 data$DBII = as.numeric(gsub(",", ".", gsub("\\.", "", data$DBII)))
 data$Customer_since_interval = as.integer(data$Customer_since_interval)
@@ -199,32 +224,63 @@ md.pattern(data, plot= T)
 md.pairs(data)
 
 # Multiple Imputation 
-imp_data = mice(data, m=5) # Fehlermeldung wg. nicht installiertem lattice package
+# imp_data = mice(data) # Fehlermeldung wg. nicht installiertem lattice package
+# train_data_impute <- complete(imp_data, "long")
 
-
-# Outlier  ----------------------------------------------------------------
+# Outlier ----------------------------------------------------------------
 
 # Outlier Detection & Elimination
 
+summary(data)
+
 ## Age
+plot(data[, Age])
 # Customers older than 105 years
 data[Age >= 105, .N, by = Churn] # 14 Customers are 105 years old or older 
 # Customers younger than 18 years
 data[Age < 18, .N, by = Churn] # 9 Customers are younger than 18 years 
 # Set to NA, since we interprete these factors as not meaningful
-data[Age >= 105] = NA
-data[Age >= 105] = NA
+data$Age[data$Age >= 105] = NA 
+data$Age[data$Age < 18] = NA
 
-
-# Consumption
-summary(data[, Consumption])
+## Consumption
 plot(data[, Consumption])
-max(data$Consumption, na.rm= TRUE)
+summary(data[, Consumption])
 data[Consumption > 30000, .N, by = Client_type] # important to clarify what is really meant by consumption - counter reading at a given point in time which also factors in the consumption of the past years or really the consumption for a given time horizon by a single customer
+data[Consumption < 100, .N] # 233
 
-# Payment on Account
-# Annual Account
+## Payment on Account
+plot(data[, Payment_on_account])
+summary(data[, Payment_on_account])
+data[Payment_on_account > 20000, .N, by = Client_type] 
+#All Clients with a Payment larger than 20,000 are firms, which is plausable
+#Therefore, these observations should not be classified as outliers and not eliminated 
+data[Payment_on_account == 0, .N, by = Client_type] #61 observations that do not have a payment on account, maybe eliminate?
+View(data[Payment_on_account == 0]) # However, those customers have consumed sth indeed - but they just did not have to pay for it
+data[Payment_on_account == 0, .N, by = Churn] # 15 Churners here of 61
 
+## Actual Payment
+plot(data[, Actual_payment])
+# Very high Payment
+plot(data[Actual_payment <= 1000000, Actual_payment])
+data[Actual_payment > 1000000, .N]
+data[Actual_payment > 1000000000] # Actual Payment is too high, this must be a fault. Annual_Account is also that high
+data[Actual_payment > 1000000000, .N]
+data[Contract_ID == "3018420", .N]
+
+# Very low Payments
+data[Actual_payment < -100000] # does that make sense?
+data[Actual_payment < -100000, .N] 
+
+# Filter out observation with unreasonably high and low Actual Payment
+# data = data[Actual_payment < 10000000000 & Actual_payment > -100000]
+
+## Annual Account
+plot(data[, Annual_account]) # Same picture as for Annual Payment
+
+## DBII
+plot(data[, DBII]) # some observations with neg. DBII, but do not appear to be outliers 
+data[DBII < 0]
 
 # PCA ---------------------------------------------------------------------
 
@@ -245,31 +301,212 @@ cor(data$age,data$Duration_of_customer_relationship)
 str(data)
 summary(data)
 
-summary(data[Client_type=="1", .(Client_type, Age)])
-
 # Correlation Plot
+corrplot.mixed(corr=cor(data[, .(Age, 
+                                 Duration_of_customer_relationship, 
+                                 Notice_period,
+                                 Consumption, 
+                                 Payment_on_account,
+                                 Annual_account, 
+                                 DBII, 
+                                 Minimum_contract_term, 
+                                 Customer_since_interval,
+                                 Contract_start_date_interval, 
+                                 Actual_payment)], use="complete.obs", method="pearson"), 
+               upper="ellipse", 
+               tl.pos="lt")
 
-# Churn Distribution Plot 
-# Categorical features 
-# Numerical features
 
-# Explore numerical features, detect outliers
-# Kriterium gut begründen
+data %>% select_if(is.character)
+
+# Churn Distribution for Categorical Features
+data %>%
+  select(-Age, 
+         -Duration_of_customer_relationship, 
+         -Consumption, 
+         -Notice_period, 
+         -Annual_account, 
+         -DBII, 
+         -Minimum_contract_term, 
+         -Customer_since_interval,
+         -Contract_start_date_interval) %>% 
+  select_if(is.character | is.factor) %>%
+  select(Churn, everything()) %>%
+  gather(x, y, gender:PaymentMethod) %>%
+  count(Churn, x, y) %>%
+  ggplot(aes(x = y, y = n, fill = Churn, color = Churn)) +
+  facet_wrap(~ x, ncol = 4, scales = "free") +
+  geom_bar(stat = "identity", alpha = 0.5) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "top") +
+  scale_color_tableau() +
+  scale_fill_tableau()
 
 
-# Final Feature Dataset ----------------------------------------------------------
+
+
+# Churn Distribution for Continous Features 
+
+ggplot(data= data, aes(x = Age, fill = Churn, color = Churn))+
+  geom_density(alpha = 0.5)  +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "top") +
+  scale_color_tableau() +
+  scale_fill_tableau()
+
+
+data[,.(Age, 
+        Duration_of_customer_relationship, 
+        Consumption, 
+        Notice_period, 
+        Annual_account, 
+        DBII, 
+        Minimum_contract_term, 
+        Customer_since_interval,
+        Contract_start_date_interval)] %>%
+ggplot(aes(x = Age, fill = Churn, color = Churn))+
+  geom_density(alpha = 0.5) + facet_wrap(~ Churn, ncol = 3, scales = "free") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "top") +
+  scale_color_tableau() +
+  scale_fill_tableau()
+
+data[,.(Age, 
+         Duration_of_customer_relationship, 
+         Consumption, 
+         Notice_period, 
+         Annual_account, 
+         DBII, 
+         Minimum_contract_term, 
+         Customer_since_interval,
+         Contract_start_date_interval)] %>%
+  gather(x, y, MonthlyCharges:TotalCharges) %>%
+  ggplot(aes(x = y, fill = Churn, color = Churn)) +
+  facet_wrap(~ x, ncol = 3, scales = "free") +
+  geom_density(alpha = 0.5) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "top") +
+  scale_color_tableau() +
+  scale_fill_tableau()
+
+
+## Detailled Exploration of Single Features
+
+#Age 
+#Violin plot
+ggplot(data= data[complete.cases(data)], aes(x=Churn, y= Age)) + geom_violin() + ggtitle("Age Distribution of Non-Churners and Churners")
+
+#Consumption
+ggplot(data= data[complete.cases(data) & Consumption <= 10000], aes(x=Churn, y= Consumption)) + geom_violin() + ggtitle("Consumption Distribution of Non-Churners and Churners")
+
+
+# Final Dataset for Modeling ----------------------------------------------------------
 
 
 
 
 # Quick & Dirty Modeling ----------------------------------------------------------------
 
-# Try Data Partitioning in case CV did not work
-set.seed(42)
-index <- createDataPartition(data$V1, p = 0.7, list = FALSE)
-train_data <- data[index, ]
-test_data  <- data[-index, ]
+# First do simple Training / Test Split
+set.seed(456) 
+smp_siz = floor(0.70*nrow(data)) 
+train_ind = sample(seq_len(nrow(data)), size = smp_siz) 
+train_data=data[train_ind,]
+test_data=data[-train_ind,]  
 
+# 1) Naive Bayes ----------------------------------------------------------
+
+nb_classifier = naiveBayes(Churn ~ . , data = train_set, laplace=1)
+nb_pred = predict(nb_classifier, newdata = test_set[-22])
+
+get_model_performance = function (predict_variable, y_reference = test_set$is_attributed){
+  require(MLmetrics)
+  require(caret)
+  
+  Table_Predictions = table(predict_variable)
+  Confusion_Matrix = confusionMatrix(data = predict_variable, reference = y_reference)
+  Precision_Score = Precision(y_true = y_reference, y_pred = predict_variable)
+  Recall_Score = Recall(y_true = y_reference, y_pred = predict_variable)
+  F1 = F1_Score(y_true = y_reference, y_pred = predict_variable)
+  Accuracy_Score = Accuracy(y_true = y_reference, y_pred = predict_variable)
+  
+  print(list(Table_Predictions=Table_Predictions, Confusion_Matrix=Confusion_Matrix, Precision_Score=Precision_Score, Recall_Score=Recall_Score, F1=F1, Accuracy_Score=Accuracy_Score))
+}
+
+
+# 2) Random Forest --------------------------------------------------------
+
+
+
+# 3) XGBoost --------------------------------------------------------------
+
+train_data = train_data[, -19]
+test_data = test_data[, -19]
+
+train_data$Churn = as.character(train_data$Churn)
+train_data$Churn[train_data$Churn == "No"] = "0"
+train_data$Churn[train_data$Churn == "Yes"] = "1"
+train_data$Churn = as.numeric(train_data$Churn)
+
+train_data = as.matrix(train_data)
+train_data = xgb.DMatrix(train_data)
+
+xgboost <- xgboost(data = as.matrix(train_data[, -21]), 
+           label = as.numeric(train_data$Churn),
+           max_depth = 3, 
+           objective = "binary:logistic", 
+           nrounds = 10, 
+           verbose = FALSE,
+           prediction = TRUE)
+
+params <- list(booster = "gbtree", objective = "binary:logistic", eta=0.3, gamma=0, max_depth=6, min_child_weight=1, subsample=1, colsample_bytree=1)
+
+xgbcv <- xgb.cv( params = params, data = as.matrix(train_data), nrounds = 100, nfold = 5, showsd = T, stratified = T, print_every_n = 10, early_stop_round = 20, maximize = F)
+
+# xgboost_training <- xgb.cv(data = as.matrix(train_data), 
+#                            label = train_data$Churn,
+#                            booster = "dart", 
+#                            objective = "binary:logistic", 
+#                            eta = 0.3,
+#                            sample_type = "weighted", 
+#                            nfold = 5,
+#                            nrounds = 100)
+
+# Get the evaluation log 
+elog <- as.data.frame(xgboost_training$evaluation_log)
+elog
+
+# Determine and print how many trees minimize training and test error
+number_trees <- elog %>% 
+  summarize(ntrees.train = which.min(train_rmse_mean),   # find the index of min(train_rmse_mean)
+            ntrees.test  = which.min(test_rmse_mean))   # find the index of min(test_rmse_mean)
+
+# The number of trees to use, as determined by xgb.cv
+set.seed(123)
+ntrees_train <- number_trees$ntrees.train
+ntrees_test <- number_trees$ntrees.test
+
+
+# Train XGBoost Model 
+
+# Run xgboost
+xgb_model <- xgboost(data = as.matrix(train_data), # training data as matrix
+                     label = training_data$y,  # column of outcomes
+                     nrounds = ntrees_train,   # number of trees to build
+                     objective = "binary:logistic", # objective
+                     # the higher, the lower the rmse
+                     eta = 0.3,
+                     verbose = 0,  # silent,
+                     eval_metric="error",
+                     # set booster from default (="gbtree") to "dart" to enable further parameter config
+                     booster = "dart",
+                     sample_type = "weighted")
+
+
+# Predict on the Training Data to check RMSE 
+
+# Make predictions on Training Data 
+training_data$pred <- predict(xgb_model, newdata=as.matrix(train_data[,-21]))
 
 
 # Extensive Modeling --------------------------------------------------------
