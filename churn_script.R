@@ -229,6 +229,8 @@ md.pairs(data)
 # imp_data = mice(data) # Fehlermeldung wg. nicht installiertem lattice package
 # train_data_impute <- complete(imp_data, "long")
 
+# Imputation only for private customers
+
 # Outlier ----------------------------------------------------------------
 
 # Outlier Detection & Elimination
@@ -444,7 +446,7 @@ get_model_performance(predict_variable = nb_pred, y_reference = test_data$Churn)
 
 # 2) Random Forest --------------------------------------------------------
 
-randomForest(Churn ~ ., data=train_data, ntree = 300)
+randomForest(Churn ~ ., data=train_data[, -4], ntree = 300)
 
 
 # Extensive Modeling --------------------------------------------------------
@@ -530,7 +532,7 @@ model <- train(x, as.factor(make.names(y)),
 
 print(model)
 
-# f) Logistic Regression
+# f) Logistic Regression ------------
 
 # define training control
 train_control <- trainControl(method = "cv", number = 5)
