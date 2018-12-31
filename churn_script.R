@@ -15,7 +15,6 @@ install.packages("mice")
 install.packages("corrplot")
 install.packages("dplyr")
 install.packages("factoextra")
-install.packages("lattice")
 install.packages("VIM")
 install.packages("purrr")
 install.packages("corrplot")
@@ -27,6 +26,7 @@ install.packages("e1071")
 install.packages("MLmetrics")
 install.packages("ISLR")
 install.packages("randomForest")
+install.packages("gridExtra")
 
 
 # Load Packages ------------------------------------------------------------
@@ -45,7 +45,6 @@ require(mice)
 require(corrplot)
 require(dplyr)
 require(factoextra)
-require(lattice)
 require(VIM)
 require(purrr)
 require(corrplot)
@@ -60,6 +59,7 @@ library(e1071)
 library(MLmetrics)
 library(ISLR)
 library(randomForest)
+require(gridExtra)
 
 
 # Import 2017 Data -------------------------------------------------------------
@@ -226,8 +226,8 @@ md.pattern(data, plot= T)
 md.pairs(data)
 
 # Multiple Imputation 
-# imp_data = mice(data) # Fehlermeldung wg. nicht installiertem lattice package
-# train_data_impute <- complete(imp_data, "long")
+imp_data = mice(data) # Fehlermeldung wg. nicht installiertem lattice package
+# data_impute <- complete(imp_data, "long")
 
 # Imputation only for private customers
 
@@ -324,20 +324,8 @@ corrplot.mixed(corr=cor(data[, .(Age,
 
 
 # Churn Distribution for Categorical Features
-data %>%
-  select(-Age, 
-         -Duration_of_customer_relationship, 
-         -Consumption, 
-         -Notice_period, 
-         -Annual_account, 
-         -DBII, 
-         -Minimum_contract_term, 
-         -Customer_since_interval,
-         -Contract_start_date_interval)  %>%
-  select(Churn, everything()) %>%
-  gather(x, y, gender:PaymentMethod) %>%
-  count(Churn, x, y) %>%
-  ggplot(aes(x = y, y = n, fill = Churn, color = Churn)) +
+
+  ggplot(aes(data= data, x = y, y = n, fill = Churn, color = Churn)) +
   facet_wrap(~ x, ncol = 4, scales = "free") +
   geom_bar(stat = "identity", alpha = 0.5) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1),
@@ -348,13 +336,72 @@ data %>%
 
 # Churn Distribution for Continous Features 
 
-ggplot(data= data, aes(x = Age, fill = Churn, color = Churn))+
+p1 = ggplot(data= data, aes(x = Age, fill = Churn, color = Churn))+
   geom_density(alpha = 0.5)  +
   theme(axis.text.x = element_text(angle = 90, hjust = 1),
         legend.position = "top") +
   scale_color_tableau() +
   scale_fill_tableau()
 
+p2 = ggplot(data= data, aes(x = Duration_of_customer_relationship, fill = Churn, color = Churn))+
+  geom_density(alpha = 0.5)  +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "top") +
+  scale_color_tableau() +
+  scale_fill_tableau()
+
+p3 = ggplot(data= data, aes(x = Consumption, fill = Churn, color = Churn))+
+  geom_density(alpha = 0.5)  +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "top") +
+  scale_color_tableau() +
+  scale_fill_tableau()
+
+p4 = ggplot(data= data, aes(x = Contract_start_date_interval, fill = Churn, color = Churn))+
+  geom_density(alpha = 0.5)  +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "top") +
+  scale_color_tableau() +
+  scale_fill_tableau()
+
+p5 = ggplot(data= data, aes(x =  Annual_account, fill = Churn, color = Churn))+
+  geom_density(alpha = 0.5)  +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "top") +
+  scale_color_tableau() +
+  scale_fill_tableau()
+
+p6 = ggplot(data= data, aes(x = DBII, fill = Churn, color = Churn))+
+  geom_density(alpha = 0.5)  +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "top") +
+  scale_color_tableau() +
+  scale_fill_tableau()
+
+p7 = ggplot(data= data, aes(x = Minimum_contract_term, fill = Churn, color = Churn))+
+  geom_density(alpha = 0.5)  +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "top") +
+  scale_color_tableau() +
+  scale_fill_tableau()
+
+p8 = ggplot(data= data, aes(x = Customer_since_interval, fill = Churn, color = Churn))+
+  geom_density(alpha = 0.5)  +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "top") +
+  scale_color_tableau() +
+  scale_fill_tableau()
+
+# p9 = ggplot(data= data, aes(x = Notice_period, fill = Churn, color = Churn))+
+#   geom_density(alpha = 0.5)  +
+#   theme(axis.text.x = element_text(angle = 90, hjust = 1),
+#         legend.position = "top") +
+#   scale_color_tableau() +
+#   scale_fill_tableau()
+
+grid.arrange(p1, p2, p3, p4, p5, p6, p7, p8, ncol=2)
+
+###
 
 data[,.(Age, 
         Duration_of_customer_relationship, 
@@ -380,8 +427,18 @@ data[,.(Age,
          DBII, 
          Minimum_contract_term, 
          Customer_since_interval,
-         Contract_start_date_interval)] %>%
-  gather(x, y, MonthlyCharges:TotalCharges) %>%
+         Contract_start_date_interval, 
+        Churn)] %>%
+  gather(x, y, select(Age, 
+                      Duration_of_customer_relationship, 
+                      Consumption, 
+                      Notice_period, 
+                      Annual_account, 
+                      DBII, 
+                      Minimum_contract_term, 
+                      Customer_since_interval,
+                      Contract_start_date_interval, 
+                      Churn)) %>%
   ggplot(aes(x = y, fill = Churn, color = Churn)) +
   facet_wrap(~ x, ncol = 3, scales = "free") +
   geom_density(alpha = 0.5) +
