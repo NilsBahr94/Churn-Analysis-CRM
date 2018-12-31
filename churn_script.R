@@ -219,7 +219,7 @@ data$Continuous_relationship = as.factor(data$Continuous_relationship)
 # data$Digitally_savvy = as.factor(data$Digitally_savvy)
 # data[Online_account == "1" & Opt_In_Mail == "1", .N, by = Churn] # Ebenfalls alle nicht Churner, wenn Age rausgenommen
 
-# Imputation for Missing Values --------------------------------------------------------------
+# Imputation  --------------------------------------------------------------
 
 # Detect Percentage of NA's per feature
 apply(data, 2, function(col)sum(is.na(col))/length(col))
@@ -227,10 +227,10 @@ md.pattern(data, plot= T)
 md.pairs(data)
 
 # Multiple Imputation 
-imp_data = mice(data) # Fehlermeldung wg. nicht installiertem lattice package
-# data_impute <- complete(imp_data, "long")
-
-# Imputation only for private customers
+imp_data = mice(data[data$Client_type == 0], method = "cart") # Imputation only for private customers
+data_impute <- complete(imp_data, "long")
+# Later join again based on Contract_ID
+#Später dann Datenset mit data[data$Client_type == 1] einfach dazu rowbinden und dann hat man am Ende wieder ein vollständiges Datenset
 
 # Outlier ----------------------------------------------------------------
 
@@ -326,21 +326,9 @@ corrplot.mixed(corr=cor(data[, .(Age,
 
 # Churn Distribution for Categorical Features
 
-# Not correct, because density plot
-data[, .(Client_type, Bill_shock, Online_account, Opt_In_Mail, 
-         Opt_In_Post, Opt_In_Tel, Market_area, Recovered, Continuous_relationship, Churn)] %>%
-  gather(x, y, Client_type:Continuous_relationship) %>%
-  ggplot(aes(x = y, fill = Churn, color = Churn)) +
-  facet_wrap(~ x, ncol = 3, scales = "free") +
-  geom_density(alpha = 0.5) +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1),
-        legend.position = "top") +
-  scale_color_tableau() +
-  scale_fill_tableau()
-
 # Bar Chart 
 data[, .(Client_type, Bill_shock, Online_account, Opt_In_Mail, 
-         Opt_In_Post, Opt_In_Tel, Market_area, Recovered, Continuous_relationship, Churn)] %>%
+         Opt_In_Post, Opt_In_Tel, Market_area, Recovered, Continuous_relationship, Churn)] %>% drop_na() %>%
   gather(x, y, Client_type:Continuous_relationship) %>%
   count(Churn, x, y) %>%
   ggplot(aes(x = y, y = n, fill = Churn, color = Churn)) +
@@ -352,8 +340,9 @@ data[, .(Client_type, Bill_shock, Online_account, Opt_In_Mail,
   scale_fill_tableau()
 
 
-# Churn Distribution for Continous Features 
+# Churn Distribution for Continuous Features 
 
+# Density Plots
 data[,.(Age, 
         Duration_of_customer_relationship, 
         Consumption, 
@@ -362,7 +351,7 @@ data[,.(Age,
         DBII, 
         Minimum_contract_term, 
         Customer_since_interval,
-        Contract_start_date_interval, Churn)] %>%
+        Contract_start_date_interval, Churn)] %>% drop_na() %>%
   gather(x, y, Age:Contract_start_date_interval) %>%
   ggplot(aes(x = y, fill = Churn, color = Churn)) +
   facet_wrap(~ x, ncol = 3, scales = "free") +
@@ -374,6 +363,15 @@ data[,.(Age,
 
 
 ## Detailled Exploration of Single Features
+
+#Age
+
+  ggplot(data = data, aes(x = Age, fill = Churn, color = Churn)) +
+  geom_density(alpha = 0.5) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "top") +
+  scale_color_tableau() +
+  scale_fill_tableau()
 
 #Age 
 #Violin plot
@@ -529,6 +527,55 @@ model <- train(Churn ~ Client_type + Duration_of_customer_relationship,
 
 # print cv scores
 summary(model)
+
+
+
+# g) H20 ---------------------------------------------------------------------
+
+set.seed(487) 
+smp_siz = floor(0.70*nrow(data)) # 70% of data for training, 30% for testing
+train_ind = sample(seq_len(nrow(data)), size = smp_siz) 
+train_data=data[train_ind,]
+test_data=data[-train_ind,]
+
+smp_siz2 = floor(0.50*nrow(test_data))
+index2 = sample(seq_len(nrow(data)), size = smp_siz) 
+valid_data=data[-index2,]
+test_data=data[index2,]
+
+install.packages("h20")
+library(h2o)
+h2o.init(nthreads = -1)
+
+h2o.no_progress()
+
+train_hf <- as.h2o(train_data)
+valid_hf <- as.h2o(valid_data) # To Do
+test_hf <- as.h2o(test_data)
+
+response <- "Churn"
+features <- setdiff(colnames(train_hf), response)
+
+summary(train_hf$Churn, exact_quantiles = TRUE)
+summary(valid_hf$Churn, exact_quantiles = TRUE)
+summary(test_hf$Churn, exact_quantiles = TRUE)
+
+# Maybe include balance class option: http://docs.h2o.ai/h2o/latest-stable/h2o-docs/data-science/algo-params/balance_classes.html
+
+aml <- h2o.automl(x = features, 
+                  y = response,
+                  training_frame = train_hf,
+                  validation_frame = valid_hf,
+                  balance_classes = TRUE,
+                  max_runtime_secs = 21600)
+
+# View the AutoML Leaderboard
+lb <- aml@leaderboard
+
+best_model <- aml@leader
+
+h2o.saveModel(best_model, "C:\\Users\\nilsb\\sciebo\\Master\\3. Semester\\CRM and Direct Marketing\\Project\\Churn-Analysis-CRM")
+
 
 
 # Import 2018 Data ----------------------------------------------------------------
