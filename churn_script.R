@@ -234,11 +234,14 @@ apply(data, 2, function(col)sum(is.na(col))/length(col))
 md.pattern(data, plot= T)
 md.pairs(data)
 
-# Multiple Imputation 
-imp_data = mice(data) # Fehlermeldung wg. nicht installiertem lattice package
-# data_impute <- complete(imp_data, "long")
+# Multiple Imputation (only for private customers)
+private_customers = subset(data[which(data$Client_type==0),])
+corporate_customers = subset(data[which(data$Client_type==1),])
 
-# Imputation only for private customers
+imp_data = mice(private_customers) 
+private_customers <- complete(imp_data)
+
+data <- rbind(private_customers,corporate_customers)
 
 # Outlier ----------------------------------------------------------------
 
@@ -541,7 +544,9 @@ summary(model)
 
 # Cluster Analysis ----------------------------------------------------------
 #Select subset of features (namely all except for client_ID and Zip_code)
-cluster_df = (churner_df[,c("Client_type", 
+churners = data[which(data$Churn=="Yes"),]
+
+cluster_df = (churners[,c("Client_type", 
                             "Age", 
                             "Duration_of_customer_relationship", 
                             "Minimum_contract_term", 
@@ -555,11 +560,11 @@ cluster_df = (churner_df[,c("Client_type",
                             "Opt_In_Tel", 
                             "Recovered", 
                             "DBII", 
-                            "Contract_since", 
+                            
                             "International", 
-                            "Grundversorger", 
-                            "Erweitert", 
-                            "Restlich")])
+                            "MA_Grundversorger", 
+                            "MA_Erweitert", 
+                            "MA_Restlich")])
 
 #Transform to numeric features
 cluster_df$Client_type = as.numeric(cluster_df$Client_type)
@@ -576,14 +581,15 @@ cluster_df$Opt_In_Post = as.numeric(cluster_df$Opt_In_Post)
 cluster_df$Opt_In_Tel = as.numeric(cluster_df$Opt_In_Tel)
 cluster_df$Recovered = as.numeric(cluster_df$Recovered)
 cluster_df$DBII = as.numeric(cluster_df$DBII)
-cluster_df$Contract_since = as.numeric(cluster_df$Contract_since)
 cluster_df$International = as.numeric(cluster_df$International)
-cluster_df$Grundversorger = as.numeric(cluster_df$Grundversorger)
-cluster_df$Erweitert = as.numeric(cluster_df$Erweitert)
-cluster_df$Restlich = as.numeric(cluster_df$Restlich)
+cluster_df$MA_Grundversorger = as.numeric(cluster_df$MA_Grundversorger)
+cluster_df$MA_Erweitert = as.numeric(cluster_df$MA_Erweitert)
+cluster_df$MA_Restlich = as.numeric(cluster_df$MA_Restlich)
 
 #Execute HDBSCAN clustering algorithm
-hdb <- hdbscan(cluster_df, minPts = 4)
+hdb <- hdbscan(cluster_df, minPts = 10)
+
+hdb$cluster
 
 plot(hdb)
 
