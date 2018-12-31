@@ -27,28 +27,29 @@ install.packages("MLmetrics")
 install.packages("ISLR")
 install.packages("randomForest")
 install.packages("gridExtra")
+install.packages("dbscan")
 
 
 # Load Packages ------------------------------------------------------------
 
-require(readxl)
-require(tidyverse)
-require(dplyr)
-require(data.table)
-require(ggplot2)
-require(caret)
-require(lubridate)
-require(xgboost)
-require(klaR)
-require(rlang)
-require(mice)
-require(corrplot)
-require(dplyr)
-require(factoextra)
-require(VIM)
-require(purrr)
-require(corrplot)
-require(gplots)
+library(readxl)
+library(tidyverse)
+library(dplyr)
+library(data.table)
+library(ggplot2)
+library(caret)
+library(lubridate)
+library(xgboost)
+library(klaR)
+library(rlang)
+library(mice)
+library(corrplot)
+library(dplyr)
+library(factoextra)
+library(VIM)
+library(purrr)
+library(corrplot)
+library(gplots)
 library(readr)     # for fast reading of input files
 library(mice)      # mice package for Multivariate Imputation by Chained Equations (MICE)
 library(rsample)   # for splitting training and test data
@@ -59,7 +60,8 @@ library(e1071)
 library(MLmetrics)
 library(ISLR)
 library(randomForest)
-require(gridExtra)
+library(gridExtra)
+library(dbscan)
 
 
 # Import 2017 Data -------------------------------------------------------------
@@ -73,11 +75,12 @@ require(gridExtra)
 # write.csv(data_2017, "Data/Data_January_2017.csv")
 
 # L
-original_data = fread("Data/Data_January_2017.csv", na.strings = "NA")
+#setwd("D:/Julian Hentschel/CRMADM/Churn-Analysis-CRM")
+original_data = fread("Data/Data_January_2017_2.csv", na.strings = "NA")
 data = original_data
 
 # N
-original_data = fread("Data\\Data_January_2017.csv", na.strings = "NA")
+original_data = fread("Data\\Data_January_2017_2.csv", na.strings = "NA")
 data = original_data
   
   #remove title and V1 from the data set
@@ -134,11 +137,16 @@ data$Recovered[data$`Recovered`=="X"] = 1
 data$Recovered[is.na(data$`Recovered`)] = 0
 
 #Transform "Customer_since" to number of months
-data$`Customer_since` = ymd(data$`Customer_since`) # failed to parse bei wenigen - wahrscheinlich nicht im ymd Format
+
+data$`Customer_since` = dmy(data$`Customer_since`)
+#14 values are failing to parse. The reason for these failures are problems in the dataset.
+#The contracts associated with those dates have been created on the 29.02 in 2007, 2011 and 2015.
+#However, these years were no leap-years and therefore the system does not recognized the dates as valid.
 data$`Customer_since_interval` = interval(ymd(data$`Customer_since`), ymd(20170201)) %/% months(1)
 
 #Transform "Contract_start_date" to number of months
-data$`Contract_start_date` = ymd(data$`Contract_start_date`)
+
+data$`Contract_start_date` = dmy(data$`Contract_start_date`) # 6 dates failed to parse, because they were NAs
 data$`Contract_start_date_interval` = interval(ymd(data$`Contract_start_date`), ymd(20170201)) %/% months(1)
 
 #Transform "Market area" to binary variables
@@ -155,7 +163,7 @@ data$Age = as.integer(data$Age)
 data$Minimum_contract_term = as.integer(data$Minimum_contract_term)
 data$Notice_period = as.integer(data$Notice_period)
 data$Automatic_contract_extension = as.integer(data$Automatic_contract_extension)
-data$Consumption = as.numeric(data$Consumption) 
+data$Consumption = as.numeric(gsub(",", ".", gsub("\\.", "", data$Consumption)))
 data$Payment_on_account = as.numeric(data$Payment_on_account)
 data$`Annual_account` = as.numeric(gsub(",", ".", gsub("\\.", "", data$`Annual_account`)))
 data$`Bill_shock` = as.factor(data$`Bill_shock`)
@@ -200,7 +208,7 @@ data <- subset(data, data$Customer_since <= ymd(20170101))
 #However, only non-churners have this combination, therefore this new feature would not be meaningful
 
 #Create feature "international"
-data$`International` = unlist(gregexpr("[0-9]{5}", data$`Zip_code`)) # Nochmal überprüfen, kurze PLZ müssen nicht unbedingt im Ausland sein
+data$`International` = unlist(gregexpr("[0-9]{5}", data$`Zip_code`)) # Nochmal überprüfen, kurze PLZ müssen nicht unbedingt im Ausland sein. Frage: Wo sollen sie denn sonst sein? Es gibt meines Wissens nach in Deutschland nur 5 Stellige PLZs
 data$`International`[data$`International` == 1] = 0
 data$`International`[data$`International` == -1] = 1
 
@@ -529,6 +537,58 @@ model <- train(Churn ~ Client_type + Duration_of_customer_relationship,
 
 # print cv scores
 summary(model)
+
+
+# Cluster Analysis ----------------------------------------------------------
+#Select subset of features (namely all except for client_ID and Zip_code)
+cluster_df = (churner_df[,c("Client_type", 
+                            "Age", 
+                            "Duration_of_customer_relationship", 
+                            "Minimum_contract_term", 
+                            "Consumption", 
+                            "Payment_on_account", 
+                            "Annual_account", 
+                            "Bill_shock", 
+                            "Online_account",
+                            "Opt_In_Mail", 
+                            "Opt_In_Post", 
+                            "Opt_In_Tel", 
+                            "Recovered", 
+                            "DBII", 
+                            "Contract_since", 
+                            "International", 
+                            "Grundversorger", 
+                            "Erweitert", 
+                            "Restlich")])
+
+#Transform to numeric features
+cluster_df$Client_type = as.numeric(cluster_df$Client_type)
+cluster_df$Age = as.numeric(cluster_df$Age)
+cluster_df$Duration_of_customer_relationship = as.numeric(cluster_df$Duration_of_customer_relationship)
+cluster_df$Minimum_contract_term = as.numeric(cluster_df$Minimum_contract_term)
+cluster_df$Consumption = as.numeric(cluster_df$Consumption)
+cluster_df$Payment_on_account = as.numeric(cluster_df$Payment_on_account)
+cluster_df$Annual_account = as.numeric(cluster_df$Annual_account)
+cluster_df$Bill_shock = as.numeric(cluster_df$Bill_shock)
+cluster_df$Online_account = as.numeric(cluster_df$Online_account)
+cluster_df$Opt_In_Mail = as.numeric(cluster_df$Opt_In_Mail)
+cluster_df$Opt_In_Post = as.numeric(cluster_df$Opt_In_Post)
+cluster_df$Opt_In_Tel = as.numeric(cluster_df$Opt_In_Tel)
+cluster_df$Recovered = as.numeric(cluster_df$Recovered)
+cluster_df$DBII = as.numeric(cluster_df$DBII)
+cluster_df$Contract_since = as.numeric(cluster_df$Contract_since)
+cluster_df$International = as.numeric(cluster_df$International)
+cluster_df$Grundversorger = as.numeric(cluster_df$Grundversorger)
+cluster_df$Erweitert = as.numeric(cluster_df$Erweitert)
+cluster_df$Restlich = as.numeric(cluster_df$Restlich)
+
+#Execute HDBSCAN clustering algorithm
+hdb <- hdbscan(cluster_df, minPts = 4)
+
+plot(hdb)
+
+result = cbind(test[test$Churn==1,], hdb$cluster)
+
 
 
 # Import 2018 Data ----------------------------------------------------------------
