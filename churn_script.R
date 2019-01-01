@@ -90,8 +90,13 @@ library(h2o)
 
 # Import 2017 Data -------------------------------------------------------------
 
+<<<<<<< HEAD
 # data_2017 = read_excel("Data/Data January 2017.xlsx", na = "-", col_types = c("text","guess","guess","text","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess"))
 # write.csv2(data_2017, "Data/Data_January_2017_3.csv")
+=======
+data_2017 = read_excel("Data/Data January 2017.xlsx", na = "-", col_types = c("text","guess","guess","text","guess","guess","guess","guess","guess","guess","guess","numeric","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess"))
+write.csv2(data_2017, "Data/Data_January_2017_3.csv")
+>>>>>>> 9b2664250c894195435da7537a11da97a7896b87
 
 # L
 data = fread("Data/Data_January_2017_3.csv", na.strings = "NA", dec = ",")
