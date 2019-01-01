@@ -161,6 +161,20 @@ data$Online_account[is.na(data$Online_account)] = 0
 data$Recovered[data$`Recovered`=="X"] = 1
 data$Recovered[is.na(data$`Recovered`)] = 0
 
+#At 51 observations "Customer_since" starts later than "Contract start date" --> Replace "Customer_since" by "Contract_start_date"  
+nrow(subset(data,data$Customer_since>data$Contract_start_date)) 
+data$Customer_since <- if_else(data$Customer_since>data$Contract_start_date, data$Contract_start_date, data$Customer_since)
+
+#If "Contract_start_date"==NA, insert "Customer_since" as "Contract_start_date"
+data$Contract_start_date <- if_else(is.na(data$Contract_start_date), data$Customer_since, data$Contract_start_date)
+
+#If "Customer_since"==NA, calculate "Customer_since" based on "Duration_of_customer_relationship"
+data$Customer_since <- if_else(is.na(data$Customer_since),ymd(20170301)- months(data$Duration_of_customer_relationship),data$Customer_since)
+
+#At 4 observations, the contract starts later than 2017-01-01 --> Delete cases
+nrow(subset(data, data$Customer_since <= ymd(20170101)))
+data <- subset(data, data$Customer_since <= ymd(20170101))
+
 #Transform "Customer_since" to number of months
 data$`Customer_since` = dmy(data$`Customer_since`) 
 data$`Customer_since_interval` = interval(ymd(data$`Customer_since`), ymd(20170201)) %/% months(1)
@@ -185,7 +199,7 @@ data$Notice_period = as.integer(data$Notice_period)
 data$Automatic_contract_extension = as.integer(data$Automatic_contract_extension)
 data$Consumption = as.numeric(data$Consumption) 
 data$Payment_on_account = as.numeric(data$Payment_on_account)
-data$`Annual_account` = as.numeric(gsub("\\,", ".",  data$`Annual_account`))
+data$`Annual_account` = as.numeric(gsub(",", ".", gsub("\\.", "", data$`Annual_account`)))
 data$`Bill_shock` = as.factor(data$`Bill_shock`)
 data$`Online_account` = as.factor(data$`Online_account`)
 data$`Opt_In_Mail` = as.factor(data$`Opt_In_Mail`)
@@ -200,26 +214,9 @@ data$Churn = as.character(data$Churn)
 data$Churn[data$Churn == "0"] = "No"
 data$Churn[data$Churn == "1"] = "Yes"
 data$Churn = as.factor(data$Churn)
-data$DBII = as.numeric(gsub("\\,", ".", data$DBII))
+data$DBII = as.numeric(gsub(",", ".", gsub("\\.", "", data$DBII)))
 data$Customer_since_interval = as.integer(data$Customer_since_interval)
 data$Contract_start_date_interval = as.integer(data$Contract_start_date_interval)
-
-
-## Modifications
-
-#At 51 observations "Customer_since" starts later than "Contract start date" --> Replace "Customer_since" by "Contract_start_date"  
-nrow(subset(data,data$Customer_since>data$Contract_start_date)) 
-data$Customer_since <- if_else(data$Customer_since>data$Contract_start_date, data$Contract_start_date, data$Customer_since)
-
-#If "Contract_start_date"==NA, insert "Customer_since" as "Contract_start_date"
-data$Contract_start_date <- if_else(is.na(data$Contract_start_date), data$Customer_since, data$Contract_start_date)
-
-#If "Customer_since"==NA, calculate "Customer_since" based on "Duration_of_customer_relationship"
-data$Customer_since <- if_else(is.na(data$Customer_since),ymd(20170301)- months(data$Duration_of_customer_relationship),data$Customer_since)
-
-#At 4 observations, the contract starts later than 2017-01-01 --> Delete cases
-nrow(subset(data, data$Customer_since <= ymd(20170101)))
-data <- subset(data, data$Customer_since <= ymd(20170101))
 
 # Feature Engineering -------------------------------------------------------------
 
@@ -572,6 +569,7 @@ xgb_data = data
 # test_data = test_data[, -19]
 # 
 
+# 
 # train_data = as.matrix(train_data)
 # train_data = xgb.DMatrix(train_data)
 
@@ -648,14 +646,13 @@ aml <- h2o.automl(x = features,
                   y = response,
                   training_frame = train_hf,
                   validation_frame = valid_hf,
-                  balance_classes = T,
+                  balance_classes = F,
                   max_runtime_secs = 28000)
 
 # View the AutoML Leaderboard
 lb <- aml@leaderboard
 
 best_model <- aml@leader
-# Save model with idx for crm_best 
 
 h2o.saveModel(best_model, "C:\\Users\\nilsb\\sciebo\\Master\\3. Semester\\CRM and Direct Marketing\\Project\\Churn-Analysis-CRM", force = TRUE)
 
@@ -682,18 +679,6 @@ plot(perf)
 metrics <- as.data.frame(h2o.metric(perf))
 View(metrics)
 
-
-# Idee: hier in dem DF die Metrik ausrechnen, die wir im Seminar Paper optimieren müssen
-metrics$crm_eval = 3*metrics$recall + metrics$specificity
-
-# Dann nach der Metrik absteigend filtern
-## best: Index 360
-
-# Dann das Modell nehmen, das am besten performt hat und damit predicten
-
-# Dann die Confusion Matrix davon checken und zur Kontrolle nochmal Sensitivity und Specificity berechnen
-
-
 # Metrics Plot
 metrics %>%
   gather(x, y, f1:tpr) %>%
@@ -707,6 +692,7 @@ specificity = h2o.specificity()
 # Compute final metric
 final_metric = 3*recall+specificity 
 
+# Logistic Regression -----------------------------------------------------
 
 
 
