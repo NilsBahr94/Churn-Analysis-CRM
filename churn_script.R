@@ -176,11 +176,11 @@ nrow(subset(data, data$Customer_since <= ymd(20170101)))
 data <- subset(data, data$Customer_since <= ymd(20170101))
 
 #Transform "Customer_since" to number of months
-data$`Customer_since` = dmy(data$`Customer_since`) 
+data$`Customer_since` = ymd(data$`Customer_since`) 
 data$`Customer_since_interval` = interval(ymd(data$`Customer_since`), ymd(20170201)) %/% months(1)
 
 #Transform "Contract_start_date" to number of months
-data$`Contract_start_date` = dmy(data$`Contract_start_date`)
+data$`Contract_start_date` = ymd(data$`Contract_start_date`)
 data$`Contract_start_date_interval` = interval(ymd(data$`Contract_start_date`), ymd(20170201)) %/% months(1)
 
 #Transform "Market area" to binary variables
