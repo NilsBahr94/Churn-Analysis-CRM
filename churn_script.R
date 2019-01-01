@@ -27,9 +27,31 @@ install.packages("MLmetrics")
 install.packages("ISLR")
 install.packages("randomForest")
 install.packages("gridExtra")
+# Install dependencies for H20
+install.packages("RCurl")
+install.packages("bitops")
+install.packages("rjson")
+install.packages("statmod")
+install.packages("tools")
+install.packages("yaml")
+install.packages("ModelMetrics")
+# Install H20
+# The following two commands remove any previously installed H2O packages for R.
+if ("package:h2o" %in% search()) { detach("package:h2o", unload=TRUE) }
+if ("h2o" %in% rownames(installed.packages())) { remove.packages("h2o") }
+# # Next, we download packages that H2O depends on.
+pkgs <- c("RCurl","jsonlite")
+for (pkg in pkgs) {
+  if (! (pkg %in% rownames(installed.packages()))) { install.packages(pkg) }
+}
+# Now we download, install and initialize the H2O package for R.
+install.packages("h2o", type="source", repos="http://h2o-release.s3.amazonaws.com/h2o/rel-xu/1/R")
 
+# Finally, let's load H2O and start up an H2O cluster
 
 # Load Packages ------------------------------------------------------------
+
+
 
 require(readxl)
 require(tidyverse)
@@ -37,7 +59,7 @@ require(dplyr)
 require(data.table)
 require(ggplot2)
 require(caret)
-require(lubridate)
+
 require(xgboost)
 require(klaR)
 require(rlang)
@@ -50,17 +72,23 @@ require(purrr)
 require(corrplot)
 require(gplots)
 library(readr)     # for fast reading of input files
-library(mice)      # mice package for Multivariate Imputation by Chained Equations (MICE)
 library(rsample)   # for splitting training and test data
 library(recipes)   # for preprocessing
-library(yardstick) # for evaluation
 library(ggthemes)  # for additional plotting themes
 library(e1071)
 library(MLmetrics)
 library(ISLR)
 library(randomForest)
-require(gridExtra)
+require(lubridate)
 
+# Dependencies for H20
+require(RCurl)
+require(bitops)
+require(rjson)
+require(statmod)
+require(tools)
+require(yaml)
+library(h2o)
 
 # Import 2017 Data -------------------------------------------------------------
 
@@ -228,7 +256,13 @@ md.pairs(data)
 
 # Multiple Imputation 
 imp_data = mice(data[data$Client_type == 0], method = "cart") # Imputation only for private customers
-data_impute <- complete(imp_data, "long")
+data_impute <- complete(imp_data)
+write.csv(data_impute, "Data/Data_January_2017_Imputed_CART.csv")
+apply(data_impute, 2, function(col)sum(is.na(col))/length(col))
+
+data_firms = data[Client_type == 1]
+imputed_data = base::rbind(data_impute, imp_data)
+
 # Later join again based on Contract_ID
 #Später dann Datenset mit data[data$Client_type == 1] einfach dazu rowbinden und dann hat man am Ende wieder ein vollständiges Datenset
 
@@ -327,8 +361,16 @@ corrplot.mixed(corr=cor(data[, .(Age,
 # Churn Distribution for Categorical Features
 
 # Bar Chart 
-data[, .(Client_type, Bill_shock, Online_account, Opt_In_Mail, 
-         Opt_In_Post, Opt_In_Tel, Market_area, Recovered, Continuous_relationship, Churn)] %>% drop_na() %>%
+data[, .(Client_type, 
+         Bill_shock, 
+         Online_account, 
+         Opt_In_Mail, 
+         Opt_In_Post, 
+         Opt_In_Tel, 
+         Market_area, 
+         Recovered, 
+         Continuous_relationship, 
+         Churn)] %>% drop_na() %>%
   gather(x, y, Client_type:Continuous_relationship) %>%
   count(Churn, x, y) %>%
   ggplot(aes(x = y, y = n, fill = Churn, color = Churn)) +
@@ -383,7 +425,66 @@ ggplot(data= data[complete.cases(data) & Consumption <= 10000], aes(x=Churn, y= 
 
 # Final Dataset for Modeling ----------------------------------------------------------
 
+data = data[, .(Churn, 
+                Client_type, 
+                Bill_shock, 
+                Online_account, 
+                Opt_In_Mail, 
+                Opt_In_Post, 
+                Opt_In_Tel, 
+                MA_Grundversorger,
+                MA_Erweitert,
+                MA_Restlich,
+                Recovered, 
+                Continuous_relationship, 
+                Age, 
+                Duration_of_customer_relationship, 
+                Consumption, 
+                Notice_period, 
+                Annual_account, 
+                DBII, 
+                Minimum_contract_term, 
+                Customer_since_interval,
+                Contract_start_date_interval)]
 
+# Create random training, validation, and test sets
+
+# Set some input variables to define the splitting.
+# Input 1. The data frame that you want to split into training, validation, and test.
+# data
+
+set.seed(562)
+
+# Input 2. Set the fractions of the dataframe you want to split into training, 
+# validation, and test.
+fractionTraining   <- 0.60
+fractionValidation <- 0.20
+fractionTest       <- 0.20
+
+# Compute sample sizes.
+sampleSizeTraining   <- floor(fractionTraining   * nrow(data))
+sampleSizeValidation <- floor(fractionValidation * nrow(data))
+sampleSizeTest       <- floor(fractionTest       * nrow(data))
+
+# Create the randomly-sampled indices for the dataframe. Use setdiff() to
+# avoid overlapping subsets of indices.
+indicesTraining    <- sort(sample(seq_len(nrow(data)), size=sampleSizeTraining))
+indicesNotTraining <- setdiff(seq_len(nrow(data)), indicesTraining)
+indicesValidation  <- sort(sample(indicesNotTraining, size=sampleSizeValidation))
+indicesTest        <- setdiff(indicesNotTraining, indicesValidation)
+
+# Finally, output the three dataframes for training, validation and test.
+train_data <- data[indicesTraining, ]
+valid_data <- data[indicesValidation, ]
+test_data  <- data[indicesTest, ]
+
+dim(train_data)
+dim(test_data)
+dim(valid_data)
+
+str(train_data)
+str(valid_data)
+str(test_data)
 
 
 # Quick & Dirty Modeling ----------------------------------------------------------------
@@ -447,13 +548,34 @@ plot(model)
 
 # d) XGBoost -------------------
 
-# train_data = train_data[, -19]
-# test_data = test_data[, -19]
-# 
+## Data Preprocessing XGBOOst --------
+
+# Create XGBoost specific dataset
+
+xgb_data = data
+
+## 1. Remove information about the target variable from the training data
+
+# Not applicable here
+
+## 2. Reduce the amount of redundant information
+
+# Already done (deleted Customer_ID, V1, and so on)
+
+## 3. Convert categorical information (like country) to a numeric format
+
 # train_data$Churn = as.character(train_data$Churn)
 # train_data$Churn[train_data$Churn == "No"] = "0"
 # train_data$Churn[train_data$Churn == "Yes"] = "1"
 # train_data$Churn = as.numeric(train_data$Churn)
+
+## 4. Split dataset into testing and training subsets
+## 5. Convert the cleaned dataframe to a Dmatrix
+
+# train_data = train_data[, -19]
+# test_data = test_data[, -19]
+# 
+
 # 
 # train_data = as.matrix(train_data)
 # train_data = xgb.DMatrix(train_data)
@@ -530,53 +652,72 @@ summary(model)
 
 
 
-# g) H20 ---------------------------------------------------------------------
+# g) H2o ---------------------------------------------------------------------
 
-set.seed(487) 
-smp_siz = floor(0.70*nrow(data)) # 70% of data for training, 30% for testing
-train_ind = sample(seq_len(nrow(data)), size = smp_siz) 
-train_data=data[train_ind,]
-test_data=data[-train_ind,]
-
-smp_siz2 = floor(0.50*nrow(test_data))
-index2 = sample(seq_len(nrow(data)), size = smp_siz) 
-valid_data=data[-index2,]
-test_data=data[index2,]
-
-install.packages("h20")
-library(h2o)
 h2o.init(nthreads = -1)
 
 h2o.no_progress()
 
 train_hf <- as.h2o(train_data)
-valid_hf <- as.h2o(valid_data) # To Do
+valid_hf <- as.h2o(valid_data) 
 test_hf <- as.h2o(test_data)
 
 response <- "Churn"
 features <- setdiff(colnames(train_hf), response)
 
-summary(train_hf$Churn, exact_quantiles = TRUE)
-summary(valid_hf$Churn, exact_quantiles = TRUE)
-summary(test_hf$Churn, exact_quantiles = TRUE)
-
-# Maybe include balance class option: http://docs.h2o.ai/h2o/latest-stable/h2o-docs/data-science/algo-params/balance_classes.html
+summary(train_hf$Churn, exact_quantiles = TRUE) 
+summary(valid_hf$Churn, exact_quantiles = TRUE) 
+summary(test_hf$Churn, exact_quantiles = TRUE) 
 
 aml <- h2o.automl(x = features, 
                   y = response,
                   training_frame = train_hf,
                   validation_frame = valid_hf,
-                  balance_classes = TRUE,
-                  max_runtime_secs = 21600)
+                  balance_classes = F,
+                  max_runtime_secs = 28000)
 
 # View the AutoML Leaderboard
 lb <- aml@leaderboard
 
 best_model <- aml@leader
 
-h2o.saveModel(best_model, "C:\\Users\\nilsb\\sciebo\\Master\\3. Semester\\CRM and Direct Marketing\\Project\\Churn-Analysis-CRM")
+h2o.saveModel(best_model, "C:\\Users\\nilsb\\sciebo\\Master\\3. Semester\\CRM and Direct Marketing\\Project\\Churn-Analysis-CRM", force = TRUE)
 
+# Prediction
+pred <- h2o.predict(best_model, test_hf[, -1])
 
+# Evaluation
+# https://www.rdocumentation.org/packages/h2o/versions/2.4.3.11/topics/h2o.performance
+# Optimize for 3*Sensitivity (Recall) + Specificity (Selectivity)
+
+# Mean per class error
+h2o.mean_per_class_error(best_model, train = TRUE, valid = TRUE, xval = TRUE)
+h2o.auc(best_model, train = TRUE)
+h2o.auc(best_model, valid = TRUE)
+h2o.auc(best_model, xval = TRUE)
+
+# Confusion matrix on validation data
+h2o.confusionMatrix(best_model, valid = TRUE)
+perf <- h2o.performance(best_model, test_hf) 
+h2o.confusionMatrix(perf)
+plot(perf)
+
+# Metrics Overview
+metrics <- as.data.frame(h2o.metric(perf))
+View(metrics)
+
+# Metrics Plot
+metrics %>%
+  gather(x, y, f1:tpr) %>%
+  ggplot(aes(x = threshold, y = y, group = x)) +
+  facet_wrap(~ x, ncol = 2, scales = "free") +
+  geom_line()
+
+# Specific Metrics
+recall = h2o.recall() #insert H20ModelMetrics Object
+specificity = h2o.specificity()
+# Compute final metric
+final_metric = 3*recall+specificity 
 
 # Import 2018 Data ----------------------------------------------------------------
 
