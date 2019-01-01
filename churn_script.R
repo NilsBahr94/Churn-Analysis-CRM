@@ -96,12 +96,12 @@ library(h2o)
 # data_2017 = read_excel("Data\\Data January 2017.xlsx", na = "-")
 # write.csv(data_2017, "Data\\Data_January_2017.csv")
 
-# # L
-# data_2017 = read_excel("Data/Data January 2017.xlsx", na = "-")
-# write.csv(data_2017, "Data/Data_January_2017.csv")
+# L
+# data_2017 = read_excel("Data/Data January 2017.xlsx", na = "-", col_types = c("text","guess","guess","text","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess"))
+# write.csv2(data_2017, "Data/Data_January_2017_3.csv")
 
 # L
-original_data = fread("Data/Data_January_2017_2.csv", na.strings = "NA")
+original_data = fread("Data/Data_January_2017_3.csv", na.strings = "NA", dec = ",")
 data = original_data
 
 # N
