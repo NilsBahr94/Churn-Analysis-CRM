@@ -682,11 +682,18 @@ xgb_model_with_cv = xgboost(data = xgb_train_m[ , -1],
                        verbose = 0,
                        eval_metrix = "auc")  # silent
 
-
 # Predict on the Training Data 
 pred_xgb_model_with_cv <- predict(xgb_model_with_cv, newdata=xgb_test_m[,-1])
 
 # To Do: Convert Probabilities back into labels 
+predict(xgb_model_with_cv, newdata=xgb_test_m[,-1]) %>%
+  as.tibble() %>%
+  mutate(prediction = round(value),
+         label = xgb_test_m[ , 1]) %>%
+  count(prediction, label)
+
+
+# Show Confusion Matrix
 ConfusionMatrix(pred_xgb_model_with_cv, xgb_test_m[,1])
 
 
@@ -736,7 +743,7 @@ aml <- h2o.automl(x = features,
                   validation_frame = valid_hf,
                   balance_classes = TRUE,
                   sort_metric = "AUC", 
-                  max_runtime_secs = 28800)
+                  max_runtime_secs = 25200)
 
 # View the AutoML Leaderboard
 lb <- aml@leaderboard
