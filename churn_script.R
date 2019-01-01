@@ -105,7 +105,7 @@ original_data = fread("Data/Data_January_2017_3.csv", na.strings = "NA", dec = "
 data = original_data
 
 # N
-original_data = fread("Data\\Data_January_2017_3.csv", na.strings = "NA", , dec = ",")
+original_data = fread("Data\\Data_January_2017_3.csv", na.strings = "NA", dec = ",")
 data = original_data
   
   #remove title and V1 from the data set
