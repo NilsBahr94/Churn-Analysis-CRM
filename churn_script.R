@@ -90,13 +90,10 @@ library(h2o)
 
 # Import 2017 Data -------------------------------------------------------------
 
-<<<<<<< HEAD
-# data_2017 = read_excel("Data/Data January 2017.xlsx", na = "-", col_types = c("text","guess","guess","text","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess"))
+
+# data_2017 = read_excel("Data/Data January 2017.xlsx", na = "-", col_types = c("text","guess","guess","text","guess","guess","guess","guess","guess","guess","guess","numeric","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess"))
 # write.csv2(data_2017, "Data/Data_January_2017_3.csv")
-=======
-data_2017 = read_excel("Data/Data January 2017.xlsx", na = "-", col_types = c("text","guess","guess","text","guess","guess","guess","guess","guess","guess","guess","numeric","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess"))
-write.csv2(data_2017, "Data/Data_January_2017_3.csv")
->>>>>>> 9b2664250c894195435da7537a11da97a7896b87
+
 
 # L
 data = fread("Data/Data_January_2017_3.csv", na.strings = "NA", dec = ",")
@@ -146,8 +143,6 @@ data = fread("Data\\Data_January_2017_3.csv", na.strings = "NA", dec = ",")
   names(data)[names(data) == 'Opt In Post'] <- 'Opt_In_Post'
   names(data)[names(data) == 'Opt In Tel'] <- 'Opt_In_Tel'
   names(data)[names(data) == 'Market area'] <- 'Market_area'
-
-
   
 # Data Preparation --------------------------------------------------------
   
@@ -190,10 +185,11 @@ data$`MA_Restlich` = unlist(lapply(data$Market_area, FUN = function(x) ifelse(x=
 data$Contract_ID = as.character(data$Contract_ID)
 data$`Zip_code` = as.character(data$`Zip_code`)
 data$`Client_type` = as.factor(data$`Client_type`)
-data$Age = as.integer(data$Age)
-data$Minimum_contract_term = as.integer(data$Minimum_contract_term)
-data$Notice_period = as.integer(data$Notice_period)
-data$Automatic_contract_extension = as.integer(data$Automatic_contract_extension)
+data$Age = as.numeric(data$Age)
+data$Duration_of_customer_relationship = as.numeric(data$Duration_of_customer_relationship)
+data$Minimum_contract_term = as.numeric(data$Minimum_contract_term)
+data$Notice_period = as.numeric(data$Notice_period)
+data$Automatic_contract_extension = as.numeric(data$Automatic_contract_extension)
 data$Consumption = as.numeric(data$Consumption) 
 data$Payment_on_account = as.numeric(data$Payment_on_account)
 data$`Annual_account` = as.numeric(data$`Annual_account`)
@@ -212,8 +208,8 @@ data$Churn[data$Churn == "0"] = "No"
 data$Churn[data$Churn == "1"] = "Yes"
 data$Churn = as.factor(data$Churn)
 data$DBII = as.numeric(data$DBII)
-data$Customer_since_interval = as.integer(data$Customer_since_interval)
-data$Contract_start_date_interval = as.integer(data$Contract_start_date_interval)
+data$Customer_since_interval = as.numeric(data$Customer_since_interval)
+data$Contract_start_date_interval = as.numeric(data$Contract_start_date_interval)
 
 # Feature Engineering -------------------------------------------------------------
 
@@ -277,7 +273,7 @@ data$Age[data$Age < 18] = NA
 ## Consumption
 plot(data[, Consumption])
 summary(data[, Consumption])
-data[Consumption > 30000, .N, by = Client_type] # important to clarify what is really meant by consumption - counter reading at a given point in time which also factors in the consumption of the past years or really the consumption for a given time horizon by a single customer
+data[Consumption > 20000, .N, by = Client_type] # important to clarify what is really meant by consumption - counter reading at a given point in time which also factors in the consumption of the past years or really the consumption for a given time horizon by a single customer
 data[Consumption < 100, .N] # 233
 
 ## Payment on Account
@@ -287,19 +283,17 @@ data[Payment_on_account > 20000, .N, by = Client_type]
 #All Clients with a Payment larger than 20,000 are firms, which is plausable
 #Therefore, these observations should not be classified as outliers and not eliminated 
 data[Payment_on_account == 0, .N, by = Client_type] #61 observations that do not have a payment on account, maybe eliminate?
-View(data[Payment_on_account == 0]) # However, those customers have consumed sth indeed - but they just did not have to pay for it
+View(data[Payment_on_account == 0]) # However, those customers have consumed sth indeed - but they just did not have to pay for it, maybe they produced their own power (solar cells) and sold it again to the provider 
 data[Payment_on_account == 0, .N, by = Churn] # 15 Churners here of 61
 
 ## Actual Payment
 plot(data[, Actual_payment])
 # Very high Payment
-plot(data[Actual_payment <= 1000000, Actual_payment])
+plot(data[Actual_payment <= 6000000, Actual_payment])
 data[Actual_payment > 1000000, .N]
-data[Actual_payment > 1000000000] # Actual Payment is too high, this must be a fault. Annual_Account is also that high
-data[Actual_payment > 1000000000, .N]
-data[Contract_ID == "3018420", .N]
-
-# To Do Eliminate
+# data[Actual_payment > 1000000000] # Actual Payment is too high, this must be a fault. Annual_Account is also that high
+# data[Actual_payment > 1000000000, .N]
+# data[Contract_ID == "3018420", .N]
 
 # Very low Payments
 data[Actual_payment < -100000] # does that make sense?
@@ -400,19 +394,25 @@ data[,.(Age,
 
 #Age
 
-  ggplot(data = data, aes(x = Age, fill = Churn, color = Churn)) +
+data %>% drop_na() %>%
+  ggplot(aes(x = Age, fill = Churn, color = Churn)) +
   geom_density(alpha = 0.5) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1),
         legend.position = "top") +
   scale_color_tableau() +
   scale_fill_tableau()
 
-#Age 
-#Violin plot
-ggplot(data= data[complete.cases(data)], aes(x=Churn, y= Age)) + geom_violin() + ggtitle("Age Distribution of Non-Churners and Churners")
+# Consumption
 
-#Consumption
-ggplot(data= data[complete.cases(data) & Consumption <= 10000], aes(x=Churn, y= Consumption)) + geom_violin() + ggtitle("Consumption Distribution of Non-Churners and Churners")
+data %>% drop_na() %>%
+  ggplot(aes(x = Consumption, fill = Churn, color = Churn)) +
+  geom_density(alpha = 0.5) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "top") +
+  scale_color_tableau() +
+  scale_fill_tableau()
+
+
 
 
 # Final Dataset for Modeling ----------------------------------------------------------
@@ -439,6 +439,20 @@ data = data[, .(Churn,
                 Customer_since_interval,
                 Contract_start_date_interval)]
 
+# First approach: 2 sets
+# Training and test set
+
+# smp_size <- floor(0.75 * nrow(data))
+# 
+# ## set the seed to make your partition reproducible
+# set.seed(123)
+# train_ind <- sample(seq_len(nrow(data)), size = smp_size)
+# 
+# train_data <- mtcars[train_ind, ]
+# test_data <- mtcars[-train_ind, ]
+
+
+# Second approach: 3 sets
 # Create random training, validation, and test sets
 
 # Set some input variables to define the splitting.
@@ -479,14 +493,9 @@ str(valid_data)
 str(test_data)
 
 
-# Quick & Dirty Modeling ----------------------------------------------------------------
 
-# First do simple Training / Test Split
-set.seed(456) 
-smp_siz = floor(0.70*nrow(data)) # 70% of data for training, 30% for testing
-train_ind = sample(seq_len(nrow(data)), size = smp_siz) 
-train_data=data[train_ind,]
-test_data=data[-train_ind,]  
+
+# Quick & Dirty Modeling ----------------------------------------------------------------
 
 # 1) Naive Bayes ----------------------------------------------------------
 
@@ -538,7 +547,7 @@ plot(model)
 
 # c) XGBoost -------------------
 
-## Data Preprocessing XGBOOst --------
+## Data Preprocessing XGBoost --------
 
 # Create XGBoost specific dataset
 
@@ -554,25 +563,63 @@ xgb_data = data
 
 ## 3. Convert categorical information (like country) to a numeric format
 
-# train_data$Churn = as.character(train_data$Churn)
-# train_data$Churn[train_data$Churn == "No"] = "0"
-# train_data$Churn[train_data$Churn == "Yes"] = "1"
-# train_data$Churn = as.numeric(train_data$Churn)
+xgb_data$Churn = as.character(xgb_data$Churn)
+xgb_data$Churn[xgb_data$Churn == "No"] = "0"
+xgb_data$Churn[xgb_data$Churn == "Yes"] = "1"
+xgb_data$Churn = as.numeric(xgb_data$Churn)
+xgb_data$Client_type = as.numeric(as.character(xgb_data$Client_type))
+xgb_data$Bill_shock = as.numeric(as.character(xgb_data$Bill_shock))
+xgb_data$Online_account = as.numeric(as.character(xgb_data$Online_account))
+xgb_data$Opt_In_Mail = as.numeric(as.character(xgb_data$Opt_In_Mail))
+xgb_data$Opt_In_Post = as.numeric(as.character(xgb_data$Opt_In_Post))
+xgb_data$Opt_In_Tel = as.numeric(as.character(xgb_data$Opt_In_Tel))
+xgb_data$MA_Grundversorger = as.numeric(as.character(xgb_data$MA_Grundversorger))
+xgb_data$MA_Erweitert = as.numeric(as.character(xgb_data$MA_Erweitert))
+xgb_data$MA_Restlich = as.numeric(as.character(xgb_data$MA_Restlich))
+xgb_data$Recovered = as.numeric(as.character(xgb_data$Recovered))
+xgb_data$Continuous_relationship = as.numeric(as.character(xgb_data$Continuous_relationship))
+xgb_data$Age = as.numeric(as.character(xgb_data$Age))
+xgb_data$Duration_of_customer_relationship = as.numeric(as.character(xgb_data$Duration_of_customer_relationship))
+
+# Check whether all variables are numeric
+str(xgb_data)
 
 ## 4. Split dataset into testing and training subsets
+
+# Do train, test data splitting once again
+attach(xgb_data)
+smp_siz = floor(0.70*nrow(xgb_data))
+smp_siz  
+
+set.seed(123)   
+train_ind = sample(seq_len(nrow(xgb_data)),size = smp_siz) 
+xgb_train =xgb_data[train_ind,] 
+xgb_test=xgb_data[-train_ind,] 
+
 ## 5. Convert the cleaned dataframe to a Dmatrix
 
-# train_data = train_data[, -19]
-# test_data = test_data[, -19]
-# 
+xgb_train_c = xgb.DMatrix(as.matrix(xgb_train))
+xgb_test_c = xgb.DMatrix(as.matrix(xgb_test))
 
-# 
-# train_data = as.matrix(train_data)
-# train_data = xgb.DMatrix(train_data)
 
-params <- list(booster = "gbtree", objective = "binary:logistic", eta=0.3, gamma=0, max_depth=6, min_child_weight=1, subsample=1, colsample_bytree=1)
+# Train XGBoost Model --------
 
-xgbcv <- xgb.cv( params = params, data = as.matrix(train_data), nrounds = 100, nfold = 5)
+
+
+params <- list(booster = "gbtree", 
+               objective = "binary:logistic", 
+               eta=0.3, 
+               gamma=0, 
+               max_depth=6, 
+               min_child_weight=1, 
+               subsample=1, 
+               colsample_bytree=1)
+
+xgbcv <- xgb.cv( params = params, 
+                 data = xgb_train_c, 
+                 nrounds = 100, 
+                 nfold = 5, 
+                 label = "Churn")
 
 # Get the evaluation log 
 elog <- as.data.frame(xgboost_training$evaluation_log)
@@ -639,13 +686,16 @@ summary(train_hf$Churn, exact_quantiles = TRUE)
 summary(valid_hf$Churn, exact_quantiles = TRUE) 
 summary(test_hf$Churn, exact_quantiles = TRUE) 
 
+# Define what is the positive class
+train_hf$Churn = h2o.relevel(train_hf$Churn, "Yes")
+
 aml <- h2o.automl(x = features, 
                   y = response,
                   training_frame = train_hf,
                   validation_frame = valid_hf,
-                  balance_classes = F,
-                  sort_metric = "mean_per_class_error", # or leave AUC and respecify what should be interpreted as positive
-                  max_runtime_secs = 28000)
+                  balance_classes = TRUE,
+                  sort_metric = "AUC", 
+                  max_runtime_secs = 28800)
 
 # View the AutoML Leaderboard
 lb <- aml@leaderboard
