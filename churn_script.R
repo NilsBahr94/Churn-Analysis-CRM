@@ -542,9 +542,7 @@ plot(model)
 
 # b) Random Forest -------------------
 
-# c) Support Vector Machine -------------------
-
-# d) XGBoost -------------------
+# c) XGBoost -------------------
 
 ## Data Preprocessing XGBOOst --------
 
@@ -612,27 +610,8 @@ xgb_model <- xgboost(data = as.matrix(train_data), # training data as matrix
 # Predict on the Training Data 
 training_data$pred <- predict(xgb_model, newdata=as.matrix(train_data[,-21]))
 
-# e) Catboost -------------------
 
-fit_control <- trainControl(method = "cv",
-                            number = 5,
-                            classProbs = TRUE)
-
-grid <- expand.grid(depth = c(4, 6, 8),
-                    learning_rate = 0.1,
-                    iterations = 100,
-                    l2_leaf_reg = 0.1,
-                    rsm = 0.95,
-                    border_count = 64)
-
-model <- train(x, as.factor(make.names(y)),
-               method = catboost.caret,
-               logging_level = 'Silent', preProc = NULL,
-               tuneGrid = grid, trControl = fit_control)
-
-print(model)
-
-# f) Logistic Regression ------------
+# d) Logistic Regression ------------
 
 # define training control
 train_control <- trainControl(method = "cv", number = 5)
@@ -649,8 +628,7 @@ model <- train(Churn ~ Client_type + Duration_of_customer_relationship,
 summary(model)
 
 
-
-# g) H2o ---------------------------------------------------------------------
+# e) H2o ---------------------------------------------------------------------
 
 h2o.init(nthreads = -1)
 
