@@ -554,11 +554,9 @@ plot(model)
 xgb_data = data
 
 ## 1. Remove information about the target variable from the training data
-
 # Not applicable here
 
 ## 2. Reduce the amount of redundant information
-
 # Already done (deleted Customer_ID, V1, and so on)
 
 ## 3. Convert categorical information (like country) to a numeric format
@@ -598,58 +596,98 @@ xgb_test=xgb_data[-train_ind,]
 
 ## 5. Convert the cleaned dataframe to a Dmatrix
 
-xgb_train_c = xgb.DMatrix(as.matrix(xgb_train))
-xgb_test_c = xgb.DMatrix(as.matrix(xgb_test))
+# xgb_train_c = xgb.DMatrix(as.matrix(xgb_train))
+# xgb_test_c = xgb.DMatrix(as.matrix(xgb_test))
+
+xgb_train_m = as.matrix(xgb_train)
+xgb_test_m = as.matrix(xgb_test)
 
 
 # Train XGBoost Model --------
 
+## Approach 1
 
+xgboost_model <- xgboost(data = xgb_train_m[ , -1],
+                         label = xgb_train_m[ , 1],
+                         eta = 0.1,
+                         max_depth = 10,
+                         objective = "binary:logistic",
+                         nrounds = 200,
+                         verbose = FALSE,
+                         prediction = TRUE)
+xgboost_model
+
+predict(xgboost_model,
+        as.matrix(xgb_test_m[, -1])) %>%
+  as.tibble() %>%
+  mutate(prediction = round(value),
+         label = xgb_test_m[ , 1]) %>%
+  count(prediction, label)
+
+# Approach 2
+
+xgb_train_c = xgb.DMatrix(as.matrix(xgb_train), label = xgb_train$Churn)
+xgb_test_c = xgb.DMatrix(as.matrix(xgb_test), label = xgb_test$Churn)
 
 params <- list(booster = "gbtree", 
                objective = "binary:logistic", 
                eta=0.3, 
                gamma=0, 
-               max_depth=6, 
-               min_child_weight=1, 
-               subsample=1, 
-               colsample_bytree=1)
+               max_depth=6)
 
-xgbcv <- xgb.cv( params = params, 
-                 data = xgb_train_c, 
-                 nrounds = 100, 
-                 nfold = 5, 
-                 label = "Churn")
+watchlist <- list(train = xgb_train_c, eval = xgb_test_c)
+
+bst_model <- xgb.train(params = params, 
+                       data = xgb_train_c, 
+                       nrounds = 200, 
+                       watchlist = watchlist,
+                       verbose = FALSE,
+                       prediction = TRUE)
+bst_model
+
+# Approach 3 
+
+cv <- xgb.cv(data = xgb_train_m[ , -1],
+             label = xgb_train_m[ , 1],
+             nrounds = 150,
+             nfold = 5,
+             objective = "binary:logistic",
+             eta = 0.01,
+             max_depth = 6,
+             verbose = 0    # silent
+)
 
 # Get the evaluation log 
-elog <- as.data.frame(xgboost_training$evaluation_log)
+elog <- as.data.frame(cv$evaluation_log)
 elog
 
 # Determine and print how many trees minimize training and test error
-number_trees <- elog %>% 
-  summarize(ntrees.train = which.min(train_rmse_mean),   # find the index of min(train_rmse_mean)
-            ntrees.test  = which.min(test_rmse_mean))   # find the index of min(test_rmse_mean)
+elog %>% 
+  summarize(ntrees.train = which.min(train_error_mean),   # find the index of min
+            ntrees.test  = which.min(test_error_mean))   # find the index of min
 
 # The number of trees to use, as determined by xgb.cv
 set.seed(123)
 ntrees_train <- number_trees$ntrees.train
 ntrees_test <- number_trees$ntrees.test
 
-# Train XGBoost Model 
-xgb_model <- xgboost(data = as.matrix(train_data), # training data as matrix
-                     label = train_data$Churn,  # column of outcomes
-                     nrounds = ntrees_train,   # number of trees to build
-                     objective = "binary:logistic", # objective
-                     # the higher, the lower the rmse
-                     eta = 0.3,
-                     verbose = 0,  # silent,
-                     eval_metric="error",
-                     # set booster from default (="gbtree") to "dart" to enable further parameter config
-                     booster = "gbtree",
-                     sample_type = "weighted")
+ntrees = ntrees_test
+
+xgb_model_with_cv = xgboost(data = xgb_train_m[ , -1],
+                            label = xgb_train_m[ , 1],  # column of outcomes
+                       nrounds = 100,       # number of trees to build
+                       objective = "binary:logistic", # objective
+                       eta = 0.01,
+                       depth = 6,
+                       verbose = 0,
+                       eval_metrix = "auc")  # silent
+
 
 # Predict on the Training Data 
-training_data$pred <- predict(xgb_model, newdata=as.matrix(train_data[,-21]))
+pred_xgb_model_with_cv <- predict(xgb_model_with_cv, newdata=xgb_test_m[,-1])
+
+# To Do: Convert Probabilities back into labels 
+ConfusionMatrix(pred_xgb_model_with_cv, xgb_test_m[,1])
 
 
 # d) Logistic Regression ------------
@@ -670,6 +708,9 @@ summary(model)
 
 
 # e) H2o ---------------------------------------------------------------------
+
+
+# e_1) All models -------
 
 h2o.init(nthreads = -1)
 
@@ -739,6 +780,16 @@ recall = h2o.recall() #insert H20ModelMetrics Object
 specificity = h2o.specificity()
 # Compute final metric
 final_metric = 3*recall+specificity 
+
+# e_2) Gradient Boosting Machine -------
+
+h2o_gbm <- h2o.gbm(x = features, 
+                   y = response, 
+                   training_frame = train_hf,
+                   nfolds = 5) # cross-validation
+h2o_gbm
+
+h2o.performance(h2o_gbm, test_hf) 
 
 
 # Logistic Regression -----------------------------------------------------
