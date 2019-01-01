@@ -107,53 +107,53 @@ data = original_data
 # N
 original_data = fread("Data\\Data_January_2017.csv", na.strings = "NA")
 data = original_data
-  
-  #remove title and V1 from the data set
-  data = data[,c("Contract_ID", 
-                 "Client type", 
-                 "Zip code", 
-                 "Age", 
-                 "Duration of customer relationship", 
-                 "Customer since",
-                 "Contract start date", 
-                 "Minimum contract term", 
-                 "Notice period",
-                 "Automatic contract extension",
-                 "Consumption", 
-                 "Payment on account", 
-                 "Annual account", 
-                 "Bill shock", 
-                 "Online account", 
-                 "Opt In Mail", 
-                 "Opt In Post", 
-                 "Opt In Tel", 
-                 "Market area", 
-                 "Recovered", 
-                 "DBII", 
-                 "Churn")]
-  
-  #rename cols in order to avoid problems with imputation
-  
-  names(data)[names(data) == 'Client type'] <- 'Client_type' # Customer since, Notice Period, Automatic Contract extension
-  names(data)[names(data) == 'Zip code'] <- 'Zip_code'
-  names(data)[names(data) == 'Duration of customer relationship'] <- 'Duration_of_customer_relationship'  
-  names(data)[names(data) == 'Customer since' ] <- 'Customer_since' 
-  names(data)[names(data) == 'Contract start date' ] <- 'Contract_start_date' 
-  names(data)[names(data) == 'Minimum contract term'] <- 'Minimum_contract_term'
-  names(data)[names(data) == 'Notice period' ] <- 'Notice_period' 
-  names(data)[names(data) == 'Automatic contract extension' ] <- 'Automatic_contract_extension' 
-  names(data)[names(data) == 'Payment on account'] <- 'Payment_on_account'
-  names(data)[names(data) == 'Annual account'] <- 'Annual_account'
-  names(data)[names(data) == 'Bill shock'] <- 'Bill_shock'
-  names(data)[names(data) == 'Online account'] <- 'Online_account'
-  names(data)[names(data) == 'Opt In Mail'] <- 'Opt_In_Mail'
-  names(data)[names(data) == 'Opt In Post'] <- 'Opt_In_Post'
-  names(data)[names(data) == 'Opt In Tel'] <- 'Opt_In_Tel'
-  names(data)[names(data) == 'Market area'] <- 'Market_area'
+
+#remove title and V1 from the data set
+data = data[,c("Contract_ID", 
+               "Client type", 
+               "Zip code", 
+               "Age", 
+               "Duration of customer relationship", 
+               "Customer since",
+               "Contract start date", 
+               "Minimum contract term", 
+               "Notice period",
+               "Automatic contract extension",
+               "Consumption", 
+               "Payment on account", 
+               "Annual account", 
+               "Bill shock", 
+               "Online account", 
+               "Opt In Mail", 
+               "Opt In Post", 
+               "Opt In Tel", 
+               "Market area", 
+               "Recovered", 
+               "DBII", 
+               "Churn")]
+
+#rename cols in order to avoid problems with imputation
+
+names(data)[names(data) == 'Client type'] <- 'Client_type' # Customer since, Notice Period, Automatic Contract extension
+names(data)[names(data) == 'Zip code'] <- 'Zip_code'
+names(data)[names(data) == 'Duration of customer relationship'] <- 'Duration_of_customer_relationship'  
+names(data)[names(data) == 'Customer since' ] <- 'Customer_since' 
+names(data)[names(data) == 'Contract start date' ] <- 'Contract_start_date' 
+names(data)[names(data) == 'Minimum contract term'] <- 'Minimum_contract_term'
+names(data)[names(data) == 'Notice period' ] <- 'Notice_period' 
+names(data)[names(data) == 'Automatic contract extension' ] <- 'Automatic_contract_extension' 
+names(data)[names(data) == 'Payment on account'] <- 'Payment_on_account'
+names(data)[names(data) == 'Annual account'] <- 'Annual_account'
+names(data)[names(data) == 'Bill shock'] <- 'Bill_shock'
+names(data)[names(data) == 'Online account'] <- 'Online_account'
+names(data)[names(data) == 'Opt In Mail'] <- 'Opt_In_Mail'
+names(data)[names(data) == 'Opt In Post'] <- 'Opt_In_Post'
+names(data)[names(data) == 'Opt In Tel'] <- 'Opt_In_Tel'
+names(data)[names(data) == 'Market area'] <- 'Market_area'
 
 
 # Data Preparation --------------------------------------------------------
-  
+
 # Online Account - NA to 0 
 data$Online_account[is.na(data$Online_account)] = 0
 
@@ -406,7 +406,7 @@ data[,.(Age,
 
 #Age
 
-  ggplot(data = data, aes(x = Age, fill = Churn, color = Churn)) +
+ggplot(data = data, aes(x = Age, fill = Churn, color = Churn)) +
   geom_density(alpha = 0.5) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1),
         legend.position = "top") +
@@ -781,12 +781,7 @@ data_2018 = read_excel("Data\\Data November 2018.xlsx", na = "-")
 
 data_2018 = fread("Data\\Data_November_2018.csv", na.strings = "-")
 
-
-
-
-
 # Deprecated --------------------------------------------------------------
-
 
 # Multiple Imputation 
 imp_data = mice(data[data$Client_type == 0], method = "cart") # Imputation only for private customers
