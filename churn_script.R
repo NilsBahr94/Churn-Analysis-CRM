@@ -646,7 +646,7 @@ aml <- h2o.automl(x = features,
                   training_frame = train_hf,
                   validation_frame = valid_hf,
                   balance_classes = F,
-                  sort_metric = "mean_per_class_error"
+                  sort_metric = "mean_per_class_error", # or leave AUC and respecify what should be interpreted as positive
                   max_runtime_secs = 28000)
 
 # View the AutoML Leaderboard
