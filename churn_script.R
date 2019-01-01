@@ -101,7 +101,7 @@ library(h2o)
 # write.csv(data_2017, "Data/Data_January_2017.csv")
 
 # L
-original_data = fread("Data/Data_January_2017.csv", na.strings = "NA")
+original_data = fread("Data/Data_January_2017_2.csv", na.strings = "NA")
 data = original_data
 
 # N
@@ -162,11 +162,11 @@ data$Recovered[data$`Recovered`=="X"] = 1
 data$Recovered[is.na(data$`Recovered`)] = 0
 
 #Transform "Customer_since" to number of months
-data$`Customer_since` = ymd(data$`Customer_since`) # failed to parse bei wenigen - wahrscheinlich nicht im ymd Format
+data$`Customer_since` = dmy(data$`Customer_since`) 
 data$`Customer_since_interval` = interval(ymd(data$`Customer_since`), ymd(20170201)) %/% months(1)
 
 #Transform "Contract_start_date" to number of months
-data$`Contract_start_date` = ymd(data$`Contract_start_date`)
+data$`Contract_start_date` = dmy(data$`Contract_start_date`)
 data$`Contract_start_date_interval` = interval(ymd(data$`Contract_start_date`), ymd(20170201)) %/% months(1)
 
 #Transform "Market area" to binary variables
