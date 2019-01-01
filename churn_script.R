@@ -191,7 +191,7 @@ data$Notice_period = as.integer(data$Notice_period)
 data$Automatic_contract_extension = as.integer(data$Automatic_contract_extension)
 data$Consumption = as.numeric(data$Consumption) 
 data$Payment_on_account = as.numeric(data$Payment_on_account)
-data$`Annual_account` = as.numeric(gsub(",", ".", gsub("\\.", "", data$`Annual_account`)))
+data$`Annual_account` = as.numeric(data$`Annual_account`)
 data$`Bill_shock` = as.factor(data$`Bill_shock`)
 data$`Online_account` = as.factor(data$`Online_account`)
 data$`Opt_In_Mail` = as.factor(data$`Opt_In_Mail`)
@@ -206,7 +206,7 @@ data$Churn = as.character(data$Churn)
 data$Churn[data$Churn == "0"] = "No"
 data$Churn[data$Churn == "1"] = "Yes"
 data$Churn = as.factor(data$Churn)
-data$DBII = as.numeric(gsub(",", ".", gsub("\\.", "", data$DBII)))
+data$DBII = as.numeric(data$DBII)
 data$Customer_since_interval = as.integer(data$Customer_since_interval)
 data$Contract_start_date_interval = as.integer(data$Contract_start_date_interval)
 
