@@ -51,8 +51,6 @@ install.packages("h2o", type="source", repos="http://h2o-release.s3.amazonaws.co
 
 # Load Packages ------------------------------------------------------------
 
-
-
 require(readxl)
 require(tidyverse)
 require(dplyr)
@@ -105,7 +103,7 @@ original_data = fread("Data/Data_January_2017_2.csv", na.strings = "NA")
 data = original_data
 
 # N
-original_data = fread("Data\\Data_January_2017.csv", na.strings = "NA")
+original_data = fread("Data\\Data_January_2017_2.csv", na.strings = "NA")
 data = original_data
   
   #remove title and V1 from the data set
@@ -706,9 +704,6 @@ recall = h2o.recall() #insert H20ModelMetrics Object
 specificity = h2o.specificity()
 # Compute final metric
 final_metric = 3*recall+specificity 
-
-
-
 
 # Cluster Analysis --------------------------------------------------------
 
