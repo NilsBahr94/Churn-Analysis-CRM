@@ -719,6 +719,12 @@ summary(model)
 
 # e_1) All models -------
 
+# Approaches to fix
+# Use 100% training data and cv with 5 folds 
+# disable balance_classes = F again 
+# First of all try approach with small max_runtime and then prolongue that 
+
+
 h2o.init(nthreads = -1)
 
 h2o.no_progress()
@@ -773,7 +779,8 @@ plot(perf)
 
 # Metrics Overview
 metrics <- as.data.frame(h2o.metric(perf))
-View(metrics)
+metrics$crm_eval = 3*metrics$recall + metrics$specificity
+View(metrics) # crm_eval = 3.130622, idx =360 
 
 # Metrics Plot
 metrics %>%
@@ -785,7 +792,7 @@ metrics %>%
 # Specific Metrics
 recall = h2o.recall() #insert H20ModelMetrics Object
 specificity = h2o.specificity()
-# Compute final metric
+# Compute final metricö
 final_metric = 3*recall+specificity 
 
 # e_2) Gradient Boosting Machine -------
