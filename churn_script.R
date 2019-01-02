@@ -91,7 +91,7 @@ library(h2o)
 
 
 # data_2017 = read_excel("Data/Data January 2017.xlsx", na = "-", col_types = c("text","guess","guess","text","guess","guess","guess","guess","guess","guess","guess","numeric","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess"))
-# write.csv2(data_2017, "Data/Data_January_2017_3.csv")
+#write.csv2(data, "Data/Data_January_2017_3_imputed.csv")
 
 
 # L
@@ -145,6 +145,9 @@ data = fread("Data\\Data_January_2017_3.csv", na.strings = "NA", dec = ",")
   
 # Data Preparation --------------------------------------------------------
   
+#Workaround for Julian
+#data$Consumption <- data$Consumption/100000000000000
+  
 # Online Account - NA to 0 
 data$Online_account[is.na(data$Online_account)] = 0
 
@@ -160,24 +163,11 @@ data$Customer_since <- if_else(data$Customer_since>data$Contract_start_date, dat
 data$Contract_start_date <- if_else(is.na(data$Contract_start_date), data$Customer_since, data$Contract_start_date)
 
 #If "Customer_since"==NA, calculate "Customer_since" based on "Duration_of_customer_relationship"
-data$Customer_since <- if_else(is.na(data$Customer_since),ymd(20170301)- months(data$Duration_of_customer_relationship),data$Customer_since)
+data$Customer_since <- if_else(is.na(data$Customer_since),as.character(ymd(20170301)- months(data$Duration_of_customer_relationship)),as.character(data$Customer_since))
 
 #At 4 observations, the contract starts later than 2017-01-01 --> Delete cases
 nrow(subset(data, data$Customer_since <= ymd(20170101)))
 data <- subset(data, data$Customer_since <= ymd(20170101))
-
-#Transform "Customer_since" to number of months
-data$`Customer_since` = ymd(data$`Customer_since`) 
-data$`Customer_since_interval` = interval(ymd(data$`Customer_since`), ymd(20170201)) %/% months(1)
-
-#Transform "Contract_start_date" to number of months
-data$`Contract_start_date` = ymd(data$`Contract_start_date`)
-data$`Contract_start_date_interval` = interval(ymd(data$`Contract_start_date`), ymd(20170201)) %/% months(1)
-
-#Transform "Market area" to binary variables
-data$`MA_Grundversorger` = unlist(lapply(data$Market_area, FUN = function(x) ifelse(x=="Grundversorger",1,0)))
-data$`MA_Erweitert` = unlist(lapply(data$Market_area, FUN = function(x) ifelse(x=="Erweitertes Netzgebiet",1,0)))
-data$`MA_Restlich` = unlist(lapply(data$Market_area, FUN = function(x) ifelse(x=="Restliches Bundesgebiet",1,0)))
 
 ## Feature Conversion
 #Convert features into right data types
@@ -207,8 +197,42 @@ data$Churn[data$Churn == "0"] = "No"
 data$Churn[data$Churn == "1"] = "Yes"
 data$Churn = as.factor(data$Churn)
 data$DBII = as.numeric(data$DBII)
+
+# Detect Percentage of NA's per feature
+#apply(data, 2, function(col)sum(is.na(col))/length(col))
+#md.pattern(data, plot= T)
+#md.pairs(data)
+
+#summary(data)
+
+#data[which(is.na(data$Payment_on_account )),]
+
+# Multiple Imputation (only for private customers)
+private_customers = subset(data[which(data$Client_type==0),])
+corporate_customers = subset(data[which(data$Client_type==1),])
+
+imp_data = mice(private_customers) 
+private_customers <- complete(imp_data)
+
+data <- rbind(private_customers,corporate_customers)
+
+
+#Transform "Customer_since" to number of months
+data$`Customer_since` = ymd(data$`Customer_since`) 
+data$`Customer_since_interval` = interval(ymd(data$`Customer_since`), ymd(20170201)) %/% months(1)
+
+#Transform "Contract_start_date" to number of months
+data$`Contract_start_date` = ymd(data$`Contract_start_date`)
+data$`Contract_start_date_interval` = interval(ymd(data$`Contract_start_date`), ymd(20170201)) %/% months(1)
+
+#Transform "Market area" to binary variables
+data$`MA_Grundversorger` = unlist(lapply(data$Market_area, FUN = function(x) ifelse(x=="Grundversorger",1,0)))
+data$`MA_Erweitert` = unlist(lapply(data$Market_area, FUN = function(x) ifelse(x=="Erweitertes Netzgebiet",1,0)))
+data$`MA_Restlich` = unlist(lapply(data$Market_area, FUN = function(x) ifelse(x=="Restliches Bundesgebiet",1,0)))
+
 data$Customer_since_interval = as.numeric(data$Customer_since_interval)
 data$Contract_start_date_interval = as.numeric(data$Contract_start_date_interval)
+
 
 # Feature Engineering -------------------------------------------------------------
 
@@ -236,21 +260,6 @@ data$Continuous_relationship = as.factor(data$Continuous_relationship)
 # data$Digitally_savvy = as.factor(data$Digitally_savvy)
 # data[Online_account == "1" & Opt_In_Mail == "1", .N, by = Churn] # Ebenfalls alle nicht Churner, wenn Age rausgenommen
 
-# Imputation  --------------------------------------------------------------
-
-# Detect Percentage of NA's per feature
-apply(data, 2, function(col)sum(is.na(col))/length(col))
-md.pattern(data, plot= T)
-md.pairs(data)
-
-# Multiple Imputation (only for private customers)
-private_customers = subset(data[which(data$Client_type==0),])
-corporate_customers = subset(data[which(data$Client_type==1),])
-
-imp_data = mice(private_customers) 
-private_customers <- complete(imp_data)
-
-data <- rbind(private_customers,corporate_customers)
 
 
 # Outlier ----------------------------------------------------------------
