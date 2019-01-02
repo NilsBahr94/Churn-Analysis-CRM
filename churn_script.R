@@ -1,21 +1,20 @@
 # Install Packages --------------------------------------------------------
 
-install.packages("tidyverse")
+install.packages("plyr")
+install.packages("DMwR")
 install.packages("readxl")
 install.packages("tidyverse")
-install.packages("dplyr")
 install.packages("data.table")
 install.packages("ggplot2")
 install.packages("caret", dependencies = TRUE)
 install.packages("lubridate")
 install.packages("xgboost")
-install.packages("klaR")
+# install.packages("klaR", dependencies = TRUE)
 install.packages("rlang")
-install.packages("mice")
+install.packages("mice", dependencies = TRUE)
 install.packages("corrplot")
 install.packages("dplyr")
 install.packages("factoextra")
-install.packages("VIM")
 install.packages("purrr")
 install.packages("corrplot")
 install.packages("gplots")
@@ -51,21 +50,21 @@ install.packages("h2o", type="source", repos="http://h2o-release.s3.amazonaws.co
 
 # Load Packages ------------------------------------------------------------
 
+require(plyr)
+require(DMwR)
 require(readxl)
 require(tidyverse)
-require(dplyr)
 require(data.table)
 require(ggplot2)
 require(caret)
 
 require(xgboost)
-require(klaR)
+# require(klaR)
 require(rlang)
 require(mice)
 require(corrplot)
 require(dplyr)
 require(factoextra)
-require(VIM)
 require(purrr)
 require(corrplot)
 require(gplots)
@@ -413,8 +412,6 @@ data %>% drop_na() %>%
   scale_fill_tableau()
 
 
-
-
 # Final Dataset for Modeling ----------------------------------------------------------
 
 data = data[, .(Churn, 
@@ -438,6 +435,8 @@ data = data[, .(Churn,
                 Minimum_contract_term, 
                 Customer_since_interval,
                 Contract_start_date_interval)]
+
+# To Do: Integrate International 
 
 # First approach: 2 sets
 # Training and test set
@@ -497,55 +496,54 @@ str(test_data)
 
 # Quick & Dirty Modeling ----------------------------------------------------------------
 
-# 1) Naive Bayes ----------------------------------------------------------
+#  Random Forest --------------------------------------------------------
 
-nb_classifier = naiveBayes(Churn ~ . , data = train_data, laplace=1)
-nb_pred = predict(nb_classifier, newdata = test_data[-22])
-test_data$Churn_pred = predict(nb_classifier, newdata = test_data[-22])
-# test_data[, .N, by = Churn]
-# test_data[, .N, by = Churn_pred]
-
-ConfusionMatrix(y_pred = nb_pred, y_true=test_data$Churn) # nicht die selbe length: "Supplied 21683 items to be assigned to 21684 items of column 'Churn_pred' (recycled leaving remainder of 1 items)."
-
-
-get_model_performance = function (predict_variable, y_reference = test_data$Churn){
-  require(MLmetrics)
-  require(caret)
-  
-  Table_Predictions = table(predict_variable)
-  Confusion_Matrix = confusionMatrix(data = predict_variable, reference = y_reference)
-  Precision_Score = Precision(y_true = y_reference, y_pred = predict_variable)
-  Recall_Score = Recall(y_true = y_reference, y_pred = predict_variable)
-  F1 = F1_Score(y_true = y_reference, y_pred = predict_variable)
-  Accuracy_Score = Accuracy(y_true = y_reference, y_pred = predict_variable)
-  
-  print(list(Table_Predictions=Table_Predictions, Confusion_Matrix=Confusion_Matrix, Precision_Score=Precision_Score, Recall_Score=Recall_Score, F1=F1, Accuracy_Score=Accuracy_Score))
-}
-
-get_model_performance(predict_variable = nb_pred, y_reference = test_data$Churn)
-
-
-
-# 2) Random Forest --------------------------------------------------------
-
-randomForest(Churn ~ ., data=train_data[, -4], ntree = 300)
+randomForest(Churn ~ ., data=train_data[, -1], ntree = 300)
 
 
 # Extensive Modeling --------------------------------------------------------
 
-# a) Naive Bayes -------------------
 
-myControl = trainControl(method = "cv",
-                         number = 5,
-                         classProbs = TRUE)
+# a) Random Forest -------------------
 
-model = train(Churn ~ ., data = data, method = "naive_bayes", trControl = myControl, na.action = na.pass)
+# Only possible with imputed data because NA's are no acepted
 
-plot(model)
+data_rf = data
 
-# b) Random Forest -------------------
+# Convert factor names of Churn to caret compatible format (1 and 0 are not allowed)
+data_rf$Churn = as.character(xgb_data$Churn)
+data_rf$Churn[xgb_data$Churn == "0"] = "No"
+data_rf$Churn[xgb_data$Churn == "1"] = "Yes"
+data_rf$Churn = as.factor(xgb_data$Churn)
 
-# c) XGBoost -------------------
+# Change order of factor levels such that "Yes" is interpreted as positive and "No" is interpreted as negative 
+levels(data_rf$Churn)
+data_rf$Churn = factor(data_rf$Churn, levels = c("Yes", "No"))
+levels(data_rf$Churn)
+
+
+# Smote
+cv_rf <- trainControl(method = "cv", number = 5,
+                              summaryFunction = twoClassSummary,
+                              classProbs = TRUE,
+                              allowParallel=TRUE,
+                              sampling = "smote") # Use Subsampling due to class imbalance
+
+# Define Hyperparameter Grid; changeable parameters: nrounds, max_depth, eta, gamma, colsample_bytree, min_child_weight, subsample
+rf_grid <- expand.grid(mtry= c(50,100,150,200)) 
+
+# Train Model
+set.seed(45)
+xgb_tune <- train(x= as.matrix(data_rf[, -1]),
+                  y= as.factor(data_rf$Churn),
+                  method="rf",
+                  trControl=cv_rf,
+                  tuneGrid=rf_grid,
+                  metric="Kappa" # Keep or maybe use taylored method 
+)
+
+
+# b) XGBoost -------------------
 
 ## Data Preprocessing XGBoost --------
 
@@ -604,6 +602,9 @@ xgb_test_m = as.matrix(xgb_test)
 
 
 # Train XGBoost Model --------
+
+
+# First Approaches --------------------------------------------------------
 
 ## Approach 1
 
@@ -696,29 +697,67 @@ predict(xgb_model_with_cv, newdata=xgb_test_m[,-1]) %>%
 # Show Confusion Matrix
 ConfusionMatrix(pred_xgb_model_with_cv, xgb_test_m[,1])
 
-## XGBoost caret implementation  --------
+## XGBoost caret  --------
 
-# To Do: adjust the following code 
+# XGBoost Data which is already in numerical format 
+head(as.tibble(xgb_data))
 
-# cv.ctrl <- trainControl(method = "repeatedcv", repeats = 1,number = 3, 
-#                         #summaryFunction = twoClassSummary,
-#                         classProbs = TRUE,
-#                         allowParallel=T)
-# 
-# xgb.grid <- expand.grid(nrounds = 1000,
-#                         eta = c(0.01,0.05,0.1),
-#                         max_depth = c(2,4,6,8,10,14)
-# )
-# set.seed(45)
-# xgb_tune <-train(formula,
-#                  data=train,
-#                  method="xgbTree",
-#                  trControl=cv.ctrl,
-#                  tuneGrid=xgb.grid,
-#                  verbose=T,
-#                  metric="Kappa",
-#                  nthread =3
-# )
+# Convert factor names of Churn to caret compatible format (1 and 0 are not allowed)
+xgb_data$Churn = as.character(xgb_data$Churn)
+xgb_data$Churn[xgb_data$Churn == "0"] = "No"
+xgb_data$Churn[xgb_data$Churn == "1"] = "Yes"
+xgb_data$Churn = as.factor(xgb_data$Churn)
+
+# Change order of factor levels such that "Yes" is interpreted as positive and "No" is interpreted as negative 
+levels(xgb_data$Churn)
+xgb_data$Churn = factor(xgb_data$Churn, levels = c("Yes", "No"))
+levels(xgb_data$Churn)
+
+# Down
+# cv_ctrl_down <- trainControl(method = "cv", number = 5,
+#                             summaryFunction = twoClassSummary,
+#                             classProbs = TRUE,
+#                             allowParallel=TRUE,
+#                             sampling = "down") # Use Subsampling due to class imbalance
+
+# Smote
+cv_ctrl_smote <- trainControl(method = "cv", number = 5,
+                              summaryFunction = twoClassSummary,
+                              classProbs = TRUE,
+                              allowParallel=TRUE,
+                              sampling = "smote") # Use Subsampling due to class imbalance
+
+# Define Hyperparameter Grid; changeable parameters: nrounds, max_depth, eta, gamma, colsample_bytree, min_child_weight, subsample
+xgb_grid <- expand.grid(nrounds = c(50, 100, 200),
+                        max_depth = c(4, 6, 8, 10),
+                        eta = c(0.01, 0.1, 0.3),
+                        gamma = 0,
+                        colsample_bytree = 1,
+                        min_child_weight = 1,
+                        subsample = 1)  
+
+# Train Model
+set.seed(45)
+xgb_tune <- train(x= as.matrix(xgb_data[, -1]),
+                  y= as.factor(xgb_data$Churn),
+                 method="xgbTree",
+                 trControl=cv_ctrl_smote,
+                 tuneGrid=xgb_grid,
+                 verbose=T,
+                 metric="Kappa", # Keep or maybe use taylored method 
+                 nthread =3
+)
+
+evalResults <- data.frame(Churn = evaluation$Churn)
+
+
+# Select best model based on metric of choice
+
+# (Compare Model performances based )
+
+# Predict with new model
+
+# Evaluate model's performance
 
 
 # d) Logistic Regression ------------
@@ -748,8 +787,6 @@ summary(model)
 # disable balance_classes = F again, - probably not smart
 # First of all try approach with small max_runtime and then prolongue that 
 # Maybe AUC is not determined by what factor level is portrayed as positive and negative 
-
-
 
 h2o.init(nthreads = -1)
 
@@ -897,9 +934,6 @@ data_2018 = read_excel("Data\\Data November 2018.xlsx", na = "-")
 data_2018 = fread("Data\\Data_November_2018.csv", na.strings = "-")
 
 
-
-
-
 # Deprecated --------------------------------------------------------------
 
 
@@ -911,3 +945,27 @@ apply(data_impute, 2, function(col)sum(is.na(col))/length(col))
 
 data_firms = data[Client_type == 1]
 imputed_data = base::rbind(data_impute, imp_data)
+
+
+# a) Naive Bayes 
+
+myControl = trainControl(method = "cv",
+                         number = 5,
+                         classProbs = TRUE)
+
+model = train(Churn ~ ., data = data, method = "naive_bayes", trControl = myControl, na.action = na.pass)
+
+plot(model)
+
+
+# 1) Naive Bayes 
+
+nb_classifier = naiveBayes(x = train_data ~ . , data = train_data[, -1], laplace=1)
+nb_pred = predict(nb_classifier, newdata = test_data[,-1])
+test_data$Churn_pred = predict(nb_classifier, newdata = test_data[,-1])
+# test_data[, .N, by = Churn]
+# test_data[, .N, by = Churn_pred]
+
+ConfusionMatrix(y_pred = nb_pred, y_true=test_data$Churn) # nicht die selbe length: "Supplied 21683 items to be assigned to 21684 items of column 'Churn_pred' (recycled leaving remainder of 1 items)."
+
+
