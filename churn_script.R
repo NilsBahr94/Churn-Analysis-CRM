@@ -6,7 +6,7 @@ install.packages("tidyverse")
 install.packages("dplyr")
 install.packages("data.table")
 install.packages("ggplot2")
-install.packages("caret")
+install.packages("caret", dependencies = TRUE)
 install.packages("lubridate")
 install.packages("xgboost")
 install.packages("klaR")
@@ -668,8 +668,8 @@ elog %>%
 
 # The number of trees to use, as determined by xgb.cv
 set.seed(123)
-ntrees_train <- number_trees$ntrees.train
-ntrees_test <- number_trees$ntrees.test
+ntrees_train <- elog$ntrees.train
+ntrees_test <- elog$ntrees.test
 
 ntrees = ntrees_test
 
@@ -696,6 +696,30 @@ predict(xgb_model_with_cv, newdata=xgb_test_m[,-1]) %>%
 # Show Confusion Matrix
 ConfusionMatrix(pred_xgb_model_with_cv, xgb_test_m[,1])
 
+## XGBoost caret implementation  --------
+
+# To Do: adjust the following code 
+
+# cv.ctrl <- trainControl(method = "repeatedcv", repeats = 1,number = 3, 
+#                         #summaryFunction = twoClassSummary,
+#                         classProbs = TRUE,
+#                         allowParallel=T)
+# 
+# xgb.grid <- expand.grid(nrounds = 1000,
+#                         eta = c(0.01,0.05,0.1),
+#                         max_depth = c(2,4,6,8,10,14)
+# )
+# set.seed(45)
+# xgb_tune <-train(formula,
+#                  data=train,
+#                  method="xgbTree",
+#                  trControl=cv.ctrl,
+#                  tuneGrid=xgb.grid,
+#                  verbose=T,
+#                  metric="Kappa",
+#                  nthread =3
+# )
+
 
 # d) Logistic Regression ------------
 
@@ -721,8 +745,10 @@ summary(model)
 
 # Approaches to fix
 # Use 100% training data and cv with 5 folds 
-# disable balance_classes = F again 
+# disable balance_classes = F again, - probably not smart
 # First of all try approach with small max_runtime and then prolongue that 
+# Maybe AUC is not determined by what factor level is portrayed as positive and negative 
+
 
 
 h2o.init(nthreads = -1)
@@ -775,12 +801,12 @@ h2o.auc(best_model, xval = TRUE)
 h2o.confusionMatrix(best_model, valid = TRUE)
 perf <- h2o.performance(best_model, test_hf) 
 h2o.confusionMatrix(perf)
-plot(perf)
+plot(perf) 
 
 # Metrics Overview
 metrics <- as.data.frame(h2o.metric(perf))
 metrics$crm_eval = 3*metrics$recall + metrics$specificity
-View(metrics) # crm_eval = 3.130622, idx =360 
+View(metrics) # crm_eval = 3.130622, idx =360, probably have gotten the same since AUC and balance classes = T is the same and data manipulations also did not cause anything but a shift in decimal point 
 
 # Metrics Plot
 metrics %>%
