@@ -91,7 +91,7 @@ library(h2o)
 
 
 # data_2017 = read_excel("Data/Data January 2017.xlsx", na = "-", col_types = c("text","guess","guess","text","guess","guess","guess","guess","guess","guess","guess","numeric","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess"))
-#write.csv2(data, "Data/Data_January_2017_3_imputed.csv")
+# write.csv2(data_2017, "Data/Data_January_2017_3.csv")
 
 
 # L
@@ -145,9 +145,6 @@ data = fread("Data\\Data_January_2017_3.csv", na.strings = "NA", dec = ",")
   
 # Data Preparation --------------------------------------------------------
   
-#Workaround for Julian
-#data$Consumption <- data$Consumption/100000000000000
-  
 # Online Account - NA to 0 
 data$Online_account[is.na(data$Online_account)] = 0
 
@@ -163,11 +160,24 @@ data$Customer_since <- if_else(data$Customer_since>data$Contract_start_date, dat
 data$Contract_start_date <- if_else(is.na(data$Contract_start_date), data$Customer_since, data$Contract_start_date)
 
 #If "Customer_since"==NA, calculate "Customer_since" based on "Duration_of_customer_relationship"
-data$Customer_since <- if_else(is.na(data$Customer_since),as.character(ymd(20170301)- months(data$Duration_of_customer_relationship)),as.character(data$Customer_since))
+data$Customer_since <- if_else(is.na(data$Customer_since),ymd(20170301)- months(data$Duration_of_customer_relationship),data$Customer_since)
 
 #At 4 observations, the contract starts later than 2017-01-01 --> Delete cases
 nrow(subset(data, data$Customer_since <= ymd(20170101)))
 data <- subset(data, data$Customer_since <= ymd(20170101))
+
+#Transform "Customer_since" to number of months
+data$`Customer_since` = ymd(data$`Customer_since`) 
+data$`Customer_since_interval` = interval(ymd(data$`Customer_since`), ymd(20170201)) %/% months(1)
+
+#Transform "Contract_start_date" to number of months
+data$`Contract_start_date` = ymd(data$`Contract_start_date`)
+data$`Contract_start_date_interval` = interval(ymd(data$`Contract_start_date`), ymd(20170201)) %/% months(1)
+
+#Transform "Market area" to binary variables
+data$`MA_Grundversorger` = unlist(lapply(data$Market_area, FUN = function(x) ifelse(x=="Grundversorger",1,0)))
+data$`MA_Erweitert` = unlist(lapply(data$Market_area, FUN = function(x) ifelse(x=="Erweitertes Netzgebiet",1,0)))
+data$`MA_Restlich` = unlist(lapply(data$Market_area, FUN = function(x) ifelse(x=="Restliches Bundesgebiet",1,0)))
 
 ## Feature Conversion
 #Convert features into right data types
@@ -197,42 +207,8 @@ data$Churn[data$Churn == "0"] = "No"
 data$Churn[data$Churn == "1"] = "Yes"
 data$Churn = as.factor(data$Churn)
 data$DBII = as.numeric(data$DBII)
-
-# Detect Percentage of NA's per feature
-#apply(data, 2, function(col)sum(is.na(col))/length(col))
-#md.pattern(data, plot= T)
-#md.pairs(data)
-
-#summary(data)
-
-#data[which(is.na(data$Payment_on_account )),]
-
-# Multiple Imputation (only for private customers)
-private_customers = subset(data[which(data$Client_type==0),])
-corporate_customers = subset(data[which(data$Client_type==1),])
-
-imp_data = mice(private_customers) 
-private_customers <- complete(imp_data)
-
-data <- rbind(private_customers,corporate_customers)
-
-
-#Transform "Customer_since" to number of months
-data$`Customer_since` = ymd(data$`Customer_since`) 
-data$`Customer_since_interval` = interval(ymd(data$`Customer_since`), ymd(20170201)) %/% months(1)
-
-#Transform "Contract_start_date" to number of months
-data$`Contract_start_date` = ymd(data$`Contract_start_date`)
-data$`Contract_start_date_interval` = interval(ymd(data$`Contract_start_date`), ymd(20170201)) %/% months(1)
-
-#Transform "Market area" to binary variables
-data$`MA_Grundversorger` = unlist(lapply(data$Market_area, FUN = function(x) ifelse(x=="Grundversorger",1,0)))
-data$`MA_Erweitert` = unlist(lapply(data$Market_area, FUN = function(x) ifelse(x=="Erweitertes Netzgebiet",1,0)))
-data$`MA_Restlich` = unlist(lapply(data$Market_area, FUN = function(x) ifelse(x=="Restliches Bundesgebiet",1,0)))
-
 data$Customer_since_interval = as.numeric(data$Customer_since_interval)
 data$Contract_start_date_interval = as.numeric(data$Contract_start_date_interval)
-
 
 # Feature Engineering -------------------------------------------------------------
 
@@ -260,6 +236,21 @@ data$Continuous_relationship = as.factor(data$Continuous_relationship)
 # data$Digitally_savvy = as.factor(data$Digitally_savvy)
 # data[Online_account == "1" & Opt_In_Mail == "1", .N, by = Churn] # Ebenfalls alle nicht Churner, wenn Age rausgenommen
 
+# Imputation  --------------------------------------------------------------
+
+# Detect Percentage of NA's per feature
+apply(data, 2, function(col)sum(is.na(col))/length(col))
+md.pattern(data, plot= T)
+md.pairs(data)
+
+# Multiple Imputation (only for private customers)
+private_customers = subset(data[which(data$Client_type==0),])
+corporate_customers = subset(data[which(data$Client_type==1),])
+
+imp_data = mice(private_customers) 
+private_customers <- complete(imp_data)
+
+data <- rbind(private_customers,corporate_customers)
 
 
 # Outlier ----------------------------------------------------------------
@@ -517,18 +508,24 @@ randomForest(Churn ~ ., data=train_data[, -1], ntree = 300)
 
 # Only possible with imputed data because NA's are no acepted
 
-data_rf = data
+imp_data = fread("C:\\Users\\nilsb\\sciebo\\Master\\3. Semester\\CRM and Direct Marketing\\Project\\Churn-Analysis-CRM\\Data\\Data_January_2017_3_imputed.csv")
+
+data_rf = imp_data
+data_rf$Churn = as.factor(data_rf$Churn)
+
+apply(data_rf[Client_type == 0], 2, function(col)sum(is.na(col))/length(col))
+data_rf_no_na = data_rf[Client_type == 0]
 
 # Convert factor names of Churn to caret compatible format (1 and 0 are not allowed)
-data_rf$Churn = as.character(xgb_data$Churn)
-data_rf$Churn[xgb_data$Churn == "0"] = "No"
-data_rf$Churn[xgb_data$Churn == "1"] = "Yes"
-data_rf$Churn = as.factor(xgb_data$Churn)
+data_rf_no_na$Churn = as.character(data_rf_no_na$Churn)
+data_rf_no_na$Churn[data_rf_no_na$Churn == "0"] = "No"
+data_rf_no_na$Churn[data_rf_no_na$Churn == "1"] = "Yes"
+data_rf_no_na$Churn = as.factor(data_rf_no_na$Churn)
 
 # Change order of factor levels such that "Yes" is interpreted as positive and "No" is interpreted as negative 
-levels(data_rf$Churn)
-data_rf$Churn = factor(data_rf$Churn, levels = c("Yes", "No"))
-levels(data_rf$Churn)
+levels(data_rf_no_na$Churn)
+data_rf_no_na$Churn = factor(data_rf_no_na$Churn, levels = c("Yes", "No"))
+levels(data_rf_no_na$Churn)
 
 
 # Smote
@@ -543,8 +540,8 @@ rf_grid <- expand.grid(mtry= c(50,100,150,200))
 
 # Train Model
 set.seed(45)
-xgb_tune <- train(x= as.matrix(data_rf[, -1]),
-                  y= as.factor(data_rf$Churn),
+xgb_tune <- train(x= data_rf_no_na[, -1],
+                  y= as.factor(data_rf_no_na$Churn),
                   method="rf",
                   trControl=cv_rf,
                   tuneGrid=rf_grid,
@@ -562,16 +559,20 @@ xgb_data = data
 
 ## 1. Remove information about the target variable from the training data
 # Not applicable here
-
 ## 2. Reduce the amount of redundant information
 # Already done (deleted Customer_ID, V1, and so on)
 
 ## 3. Convert categorical information (like country) to a numeric format
 
-xgb_data$Churn = as.character(xgb_data$Churn)
-xgb_data$Churn[xgb_data$Churn == "No"] = "0"
-xgb_data$Churn[xgb_data$Churn == "Yes"] = "1"
-xgb_data$Churn = as.numeric(xgb_data$Churn)
+# xgb_data$Churn = as.character(xgb_data$Churn)
+# xgb_data$Churn[xgb_data$Churn == "No"] = "0"
+# xgb_data$Churn[xgb_data$Churn == "Yes"] = "1"
+# xgb_data$Churn = as.numeric(xgb_data$Churn)
+# xgb_data$Churn = as.character(xgb_data$Churn)
+# xgb_data$Churn[xgb_data$Churn == "0"] = "No"
+# xgb_data$Churn[xgb_data$Churn == "1"] = "Yes"
+# xgb_data$Churn = as.factor(xgb_data$Churn)
+xgb_data$Churn = as.factor(xgb_data$Churn)
 xgb_data$Client_type = as.numeric(as.character(xgb_data$Client_type))
 xgb_data$Bill_shock = as.numeric(as.character(xgb_data$Bill_shock))
 xgb_data$Online_account = as.numeric(as.character(xgb_data$Online_account))
@@ -586,160 +587,46 @@ xgb_data$Continuous_relationship = as.numeric(as.character(xgb_data$Continuous_r
 xgb_data$Age = as.numeric(as.character(xgb_data$Age))
 xgb_data$Duration_of_customer_relationship = as.numeric(as.character(xgb_data$Duration_of_customer_relationship))
 
-# Check whether all variables are numeric
 str(xgb_data)
-
-## 4. Split dataset into testing and training subsets
-
-# Do train, test data splitting once again
-attach(xgb_data)
-smp_siz = floor(0.70*nrow(xgb_data))
-smp_siz  
-
-set.seed(123)   
-train_ind = sample(seq_len(nrow(xgb_data)),size = smp_siz) 
-xgb_train =xgb_data[train_ind,] 
-xgb_test=xgb_data[-train_ind,] 
-
-## 5. Convert the cleaned dataframe to a Dmatrix
-
-# xgb_train_c = xgb.DMatrix(as.matrix(xgb_train))
-# xgb_test_c = xgb.DMatrix(as.matrix(xgb_test))
-
-xgb_train_m = as.matrix(xgb_train)
-xgb_test_m = as.matrix(xgb_test)
-
-
-# Train XGBoost Model --------
-
-
-# First Approaches --------------------------------------------------------
-
-## Approach 1
-
-xgboost_model <- xgboost(data = xgb_train_m[ , -1],
-                         label = xgb_train_m[ , 1],
-                         eta = 0.1,
-                         max_depth = 10,
-                         objective = "binary:logistic",
-                         nrounds = 200,
-                         verbose = FALSE,
-                         prediction = TRUE)
-xgboost_model
-
-predict(xgboost_model,
-        as.matrix(xgb_test_m[, -1])) %>%
-  as.tibble() %>%
-  mutate(prediction = round(value),
-         label = xgb_test_m[ , 1]) %>%
-  count(prediction, label)
-
-# Approach 2
-
-xgb_train_c = xgb.DMatrix(as.matrix(xgb_train), label = xgb_train$Churn)
-xgb_test_c = xgb.DMatrix(as.matrix(xgb_test), label = xgb_test$Churn)
-
-params <- list(booster = "gbtree", 
-               objective = "binary:logistic", 
-               eta=0.3, 
-               gamma=0, 
-               max_depth=6)
-
-watchlist <- list(train = xgb_train_c, eval = xgb_test_c)
-
-bst_model <- xgb.train(params = params, 
-                       data = xgb_train_c, 
-                       nrounds = 200, 
-                       watchlist = watchlist,
-                       verbose = FALSE,
-                       prediction = TRUE)
-bst_model
-
-# Approach 3 
-
-cv <- xgb.cv(data = xgb_train_m[ , -1],
-             label = xgb_train_m[ , 1],
-             nrounds = 150,
-             nfold = 5,
-             objective = "binary:logistic",
-             eta = 0.01,
-             max_depth = 6,
-             verbose = 0    # silent
-)
-
-# Get the evaluation log 
-elog <- as.data.frame(cv$evaluation_log)
-elog
-
-# Determine and print how many trees minimize training and test error
-elog %>% 
-  summarize(ntrees.train = which.min(train_error_mean),   # find the index of min
-            ntrees.test  = which.min(test_error_mean))   # find the index of min
-
-# The number of trees to use, as determined by xgb.cv
-set.seed(123)
-ntrees_train <- elog$ntrees.train
-ntrees_test <- elog$ntrees.test
-
-ntrees = ntrees_test
-
-xgb_model_with_cv = xgboost(data = xgb_train_m[ , -1],
-                            label = xgb_train_m[ , 1],  # column of outcomes
-                       nrounds = 100,       # number of trees to build
-                       objective = "binary:logistic", # objective
-                       eta = 0.01,
-                       depth = 6,
-                       verbose = 0,
-                       eval_metrix = "auc")  # silent
-
-# Predict on the Training Data 
-pred_xgb_model_with_cv <- predict(xgb_model_with_cv, newdata=xgb_test_m[,-1])
-
-# To Do: Convert Probabilities back into labels 
-predict(xgb_model_with_cv, newdata=xgb_test_m[,-1]) %>%
-  as.tibble() %>%
-  mutate(prediction = round(value),
-         label = xgb_test_m[ , 1]) %>%
-  count(prediction, label)
-
-
-# Show Confusion Matrix
-ConfusionMatrix(pred_xgb_model_with_cv, xgb_test_m[,1])
-
-## XGBoost caret  --------
-
-# XGBoost Data which is already in numerical format 
-head(as.tibble(xgb_data))
-
-# Convert factor names of Churn to caret compatible format (1 and 0 are not allowed)
-xgb_data$Churn = as.character(xgb_data$Churn)
-xgb_data$Churn[xgb_data$Churn == "0"] = "No"
-xgb_data$Churn[xgb_data$Churn == "1"] = "Yes"
-xgb_data$Churn = as.factor(xgb_data$Churn)
 
 # Change order of factor levels such that "Yes" is interpreted as positive and "No" is interpreted as negative 
 levels(xgb_data$Churn)
 xgb_data$Churn = factor(xgb_data$Churn, levels = c("Yes", "No"))
 levels(xgb_data$Churn)
 
-# Down
-# cv_ctrl_down <- trainControl(method = "cv", number = 5,
-#                             summaryFunction = twoClassSummary,
-#                             classProbs = TRUE,
-#                             allowParallel=TRUE,
-#                             sampling = "down") # Use Subsampling due to class imbalance
+## XGBoost caret  --------
 
-# Smote
+# Create training, validation and test set
+set.seed(156)
+split1 <- createDataPartition(xgb_data$Churn, p=.6, list=FALSE)
+xgb_train_data <- xgb_data[split1,]
+other  <- xgb_data[-split1,]
+
+set.seed(234)
+split2 <- createDataPartition(other$Churn, p=.5, list=FALSE)
+xgb_eval_data = other[split2,]
+xgb_test_test = other[-split2,]
+
+# Different forms of sampling to deal with the unbalanced data 
+# Down sampling
+cv_ctrl_down <- trainControl(method = "cv", number = 5,
+                            summaryFunction = twoClassSummary,
+                            classProbs = TRUE,
+                            allowParallel=TRUE,
+                            sampling = "down") # Use Subsampling due to class imbalance
+
+# SMOTE
 cv_ctrl_smote <- trainControl(method = "cv", number = 5,
                               summaryFunction = twoClassSummary,
                               classProbs = TRUE,
                               allowParallel=TRUE,
                               sampling = "smote") # Use Subsampling due to class imbalance
 
-# Define Hyperparameter Grid; changeable parameters: nrounds, max_depth, eta, gamma, colsample_bytree, min_child_weight, subsample
-xgb_grid <- expand.grid(nrounds = c(50, 100, 200),
-                        max_depth = c(4, 6, 8, 10),
-                        eta = c(0.01, 0.1, 0.3),
+# Define Hyperparameter Grid 
+# changeable parameters: nrounds, max_depth, eta, gamma, colsample_bytree, min_child_weight, subsample
+xgb_grid <- expand.grid(nrounds = c(10, 20, 50, 100, 200),
+                        max_depth = c(2, 3, 4, 6, 8),
+                        eta = c(0.01, 0.05, 0.1, 0.3),
                         gamma = 0,
                         colsample_bytree = 1,
                         min_child_weight = 1,
@@ -747,26 +634,43 @@ xgb_grid <- expand.grid(nrounds = c(50, 100, 200),
 
 # Train Model
 set.seed(45)
-xgb_tune <- train(x= as.matrix(xgb_data[, -1]),
-                  y= as.factor(xgb_data$Churn),
-                 method="xgbTree",
-                 trControl=cv_ctrl_smote,
-                 tuneGrid=xgb_grid,
-                 verbose=T,
-                 metric="Kappa", # Keep or maybe use taylored method 
-                 nthread =3
-)
 
-evalResults <- data.frame(Churn = evaluation$Churn)
+xgb_tune <- train(x= as.matrix(xgb_train_data[, -1]),
+                    y= as.factor(xgb_train_data$Churn),
+                    method="xgbTree",
+                    trControl=cv_ctrl_down,  #change between cv_ctrl_smote & cv_ctrl_down # downsampling works much better
+                    tuneGrid=xgb_grid,
+                    verbose=T,
+                    metric="ROC", # Keep or maybe use taylored method 
+                    nthread =3)
 
+# Evaluate performance
+print(xgb_tune)
+xgb_tune_results = as.data.table(xgb_tune$results)
+xgb_tune_results$crm_eval = 3*xgb_tune_results$Sens + xgb_tune_results$Spec
+xgb_tune_results[max(xgb_tune_results$crm_eval)]
 
-# Select best model based on metric of choice
+View(xgb_tune_results)
 
-# (Compare Model performances based )
+xgb_tune$bestTune
 
-# Predict with new model
+###  Model Predictions and Performance
+# Make predictions using the test data set
+gbm.pred <- predict(xgb_tune,testX)
 
-# Evaluate model's performance
+#Look at the confusion matrix  
+confusionMatrix(gbm.pred,testData$Class) 
+
+evalResults <- data.frame(Churn = xgb_eval_data$Churn)
+evalResults$xgb <- predict(xgb_tune,
+                           newdata = xgb_eval_data[,-1],
+                           type = "prob")
+
+xgb_pred = predict(xgb_tune,
+             newdata = xgb_eval_data[,-1])
+
+confusionMatrix(xgb_pred, xgb_eval_data$Churn)
+
 
 
 # d) Logistic Regression ------------
@@ -791,6 +695,30 @@ summary(model)
 
 # e_1) All models -------
 
+# Change "Yes" and "No" to "Ja" and "Nein" in order to restructure the alphabetical order, which might lead to a right calculation of the confusion matrix rates 
+
+h2o_data = xgb_data
+
+h2o_data$Churn = as.character(h2o_data$Churn)
+h2o_data$Churn[h2o_data$Churn == "Yes"] = "Ja"
+h2o_data$Churn[h2o_data$Churn == "No"] = "Nein"
+h2o_data$Churn = as.factor(h2o_data$Churn)
+
+levels(h2o_data$Churn)
+h2o_data$Churn = factor(h2o_data$Churn, levels = c("Ja", "Nein"))
+levels(h2o_data$Churn)
+
+# Create training, validation and test set
+set.seed(789)
+split1 <- createDataPartition(h2o_data$Churn, p=.6, list=FALSE)
+h2o_train_data <- h2o_data[split1,]
+other  <- h2o_data[-split1,]
+
+set.seed(2342)
+split2 <- createDataPartition(other$Churn, p=.5, list=FALSE)
+h2o_eval_data = other[split2,]
+h2o_test_data = other[-split2,]
+
 # Approaches to fix
 # Use 100% training data and cv with 5 folds 
 # disable balance_classes = F again, - probably not smart
@@ -801,9 +729,9 @@ h2o.init(nthreads = -1)
 
 h2o.no_progress()
 
-train_hf <- as.h2o(train_data)
-valid_hf <- as.h2o(valid_data) 
-test_hf <- as.h2o(test_data)
+train_hf <- as.h2o(h2o_train_data)
+valid_hf <- as.h2o(h2o_eval_data) 
+test_hf <- as.h2o(h2o_test_data)
 
 response <- "Churn"
 features <- setdiff(colnames(train_hf), response)
@@ -819,16 +747,16 @@ aml <- h2o.automl(x = features,
                   y = response,
                   training_frame = train_hf,
                   validation_frame = valid_hf,
-                  balance_classes = TRUE,
+                  balance_classes = T,
                   sort_metric = "AUC", 
-                  max_runtime_secs = 25200)
+                  max_runtime_secs = 21600)
 
 # View the AutoML Leaderboard
 lb <- aml@leaderboard
 
 best_model <- aml@leader
 
-h2o.saveModel(best_model, "C:\\Users\\nilsb\\sciebo\\Master\\3. Semester\\CRM and Direct Marketing\\Project\\Churn-Analysis-CRM", force = TRUE)
+h2o.saveModel(best_model, "C:\\Users\\nilsb\\sciebo\\Master\\3. Semester\\CRM and Direct Marketing\\Project\\Churn-Analysis-CRM\\Models", force = TRUE)
 
 # Prediction
 pred <- h2o.predict(best_model, test_hf[, -1])
@@ -837,22 +765,24 @@ pred <- h2o.predict(best_model, test_hf[, -1])
 # https://www.rdocumentation.org/packages/h2o/versions/2.4.3.11/topics/h2o.performance
 # Optimize for 3*Sensitivity (Recall) + Specificity (Selectivity)
 
-# Mean per class error
-h2o.mean_per_class_error(best_model, train = TRUE, valid = TRUE, xval = TRUE)
-h2o.auc(best_model, train = TRUE)
-h2o.auc(best_model, valid = TRUE)
-h2o.auc(best_model, xval = TRUE)
-
 # Confusion matrix on validation data
 h2o.confusionMatrix(best_model, valid = TRUE)
 perf <- h2o.performance(best_model, test_hf) 
 h2o.confusionMatrix(perf)
-plot(perf) 
+plot(perf)
 
 # Metrics Overview
-metrics <- as.data.frame(h2o.metric(perf))
-metrics$crm_eval = 3*metrics$recall + metrics$specificity
-View(metrics) # crm_eval = 3.130622, idx =360, probably have gotten the same since AUC and balance classes = T is the same and data manipulations also did not cause anything but a shift in decimal point 
+metrics <- as.data.table(h2o.metric(perf))
+metrics$crm_eval_correct = 3*(metrics$tns/(metrics$tns+metrics$fps))+(metrics$tps)/(metrics$tps+metrics$fns)
+metrics$crm_eval = 3*metrics$recall + metrics$specificity # Calculation is not correct 
+metrics[max(crm_eval)]
+View(metrics) 
+
+# Mean per class error
+# h2o.mean_per_class_error(best_model, train = TRUE, valid = TRUE, xval = TRUE)
+# h2o.auc(best_model, train = TRUE)
+# h2o.auc(best_model, valid = TRUE)
+# h2o.auc(best_model, xval = TRUE)
 
 # Metrics Plot
 metrics %>%
@@ -977,4 +907,144 @@ test_data$Churn_pred = predict(nb_classifier, newdata = test_data[,-1])
 
 ConfusionMatrix(y_pred = nb_pred, y_true=test_data$Churn) # nicht die selbe length: "Supplied 21683 items to be assigned to 21684 items of column 'Churn_pred' (recycled leaving remainder of 1 items)."
 
+# First Approaches XGB
 
+# Check whether all variables are numeric
+str(xgb_data)
+
+## 4. Split dataset into testing and training subsets
+
+# Do train, test data splitting once again
+attach(xgb_data)
+smp_siz = floor(0.70*nrow(xgb_data))
+smp_siz  
+
+set.seed(123)   
+train_ind = sample(seq_len(nrow(xgb_data)),size = smp_siz) 
+xgb_train =xgb_data[train_ind,] 
+xgb_test=xgb_data[-train_ind,] 
+
+## 5. Convert the cleaned dataframe to a Dmatrix
+
+# xgb_train_c = xgb.DMatrix(as.matrix(xgb_train))
+# xgb_test_c = xgb.DMatrix(as.matrix(xgb_test))
+
+xgb_train_m = as.matrix(xgb_train)
+xgb_test_m = as.matrix(xgb_test)
+
+## Approach 1
+
+xgboost_model <- xgboost(data = xgb_train_m[ , -1],
+                         label = xgb_train_m[ , 1],
+                         eta = 0.1,
+                         max_depth = 10,
+                         objective = "binary:logistic",
+                         nrounds = 200,
+                         verbose = FALSE,
+                         prediction = TRUE)
+xgboost_model
+
+predict(xgboost_model,
+        as.matrix(xgb_test_m[, -1])) %>%
+  as.tibble() %>%
+  mutate(prediction = round(value),
+         label = xgb_test_m[ , 1]) %>%
+  count(prediction, label)
+
+# Approach 2
+
+xgb_train_c = xgb.DMatrix(as.matrix(xgb_train), label = xgb_train$Churn)
+xgb_test_c = xgb.DMatrix(as.matrix(xgb_test), label = xgb_test$Churn)
+
+params <- list(booster = "gbtree", 
+               objective = "binary:logistic", 
+               eta=0.3, 
+               gamma=0, 
+               max_depth=6)
+
+watchlist <- list(train = xgb_train_c, eval = xgb_test_c)
+
+bst_model <- xgb.train(params = params, 
+                       data = xgb_train_c, 
+                       nrounds = 200, 
+                       watchlist = watchlist,
+                       verbose = FALSE,
+                       prediction = TRUE)
+bst_model
+
+# Approach 3 
+
+cv <- xgb.cv(data = xgb_train_m[ , -1],
+             label = xgb_train_m[ , 1],
+             nrounds = 150,
+             nfold = 5,
+             objective = "binary:logistic",
+             eta = 0.01,
+             max_depth = 6,
+             verbose = 0    # silent
+)
+
+# Get the evaluation log 
+elog <- as.data.frame(cv$evaluation_log)
+elog
+
+# Determine and print how many trees minimize training and test error
+elog %>% 
+  summarize(ntrees.train = which.min(train_error_mean),   # find the index of min
+            ntrees.test  = which.min(test_error_mean))   # find the index of min
+
+# The number of trees to use, as determined by xgb.cv
+set.seed(123)
+ntrees_train <- elog$ntrees.train
+ntrees_test <- elog$ntrees.test
+
+ntrees = ntrees_test
+
+xgb_model_with_cv = xgboost(data = xgb_train_m[ , -1],
+                            label = xgb_train_m[ , 1],  # column of outcomes
+                            nrounds = 100,       # number of trees to build
+                            objective = "binary:logistic", # objective
+                            eta = 0.01,
+                            depth = 6,
+                            verbose = 0,
+                            eval_metrix = "auc")  # silent
+
+# Predict on the Training Data 
+pred_xgb_model_with_cv <- predict(xgb_model_with_cv, newdata=xgb_test_m[,-1])
+
+# To Do: Convert Probabilities back into labels 
+predict(xgb_model_with_cv, newdata=xgb_test_m[,-1]) %>%
+  as.tibble() %>%
+  mutate(prediction = round(value),
+         label = xgb_test_m[ , 1]) %>%
+  count(prediction, label)
+
+
+# Show Confusion Matrix
+ConfusionMatrix(pred_xgb_model_with_cv, xgb_test_m[,1])
+
+
+
+# Change "Yes" and "No" to "Ja" and "Nein" in order to restructure the alphabetical order, which might lead to a right calculation of the confusion matrix rates 
+
+h2o_data = xgb_data
+
+h2o_data$Churn = as.character(h2o_data$Churn)
+h2o_data$Churn[h2o_data$Churn == "Yes"] = "Ja"
+h2o_data$Churn[h2o_data$Churn == "No"] = "Nein"
+h2o_data$Churn = as.factor(h2o_data$Churn)
+
+levels(h2o_data$Churn)
+h2o_data$Churn = factor(h2o_data$Churn, levels = c("Ja", "Nein"))
+levels(h2o_data$Churn)
+
+# Create training, validation and test set
+set.seed(789)
+split1 <- createDataPartition(h2o_data$Churn, p=.6, list=FALSE)
+h2o_train_data <- h2o_data[split1,]
+other  <- h2o_data[-split1,]
+
+set.seed(2342)
+split2 <- createDataPartition(other$Churn, p=.5, list=FALSE)
+h2o_eval_data = other[split2,]
+h2o_test_test = other[-split2,]
