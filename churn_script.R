@@ -508,12 +508,95 @@ randomForest(Churn ~ ., data=train_data[, -1], ntree = 300)
 
 # Only possible with imputed data because NA's are no acepted
 
-imp_data = fread("C:\\Users\\nilsb\\sciebo\\Master\\3. Semester\\CRM and Direct Marketing\\Project\\Churn-Analysis-CRM\\Data\\Data_January_2017_3_imputed.csv")
+imp_data= fread("C:\\Users\\nilsb\\sciebo\\Master\\3. Semester\\CRM and Direct Marketing\\Project\\Churn-Analysis-CRM\\Data\\Data_January_2017_3_imputed.csv")
 
+str(imp_data)
+
+## Feature Conversion
+#Convert features into right data types
+imp_data$Contract_ID = as.character(imp_data$Contract_ID)
+imp_data$`Zip_code` = as.character(imp_data$`Zip_code`)
+imp_data$`Client_type` = as.factor(imp_data$`Client_type`)
+imp_data$Age = as.numeric(imp_data$Age)
+imp_data$Duration_of_customer_relationship = as.numeric(imp_data$Duration_of_customer_relationship)
+imp_data$Minimum_contract_term = as.numeric(imp_data$Minimum_contract_term)
+imp_data$Notice_period = as.numeric(imp_data$Notice_period)
+imp_data$Automatic_contract_extension = as.numeric(imp_data$Automatic_contract_extension)
+imp_data$Consumption = as.numeric(imp_data$Consumption) 
+imp_data$Payment_on_account = gsub( ",", ".", imp_data$Payment_on_account)
+imp_data$Payment_on_account = as.numeric(imp_data$Payment_on_account)
+imp_data$Annual_account = gsub( ",", ".", imp_data$Annual_account)
+imp_data$`Annual_account` = as.numeric(imp_data$`Annual_account`)
+imp_data$`Bill_shock` = as.factor(imp_data$`Bill_shock`)
+imp_data$`Online_account` = as.factor(imp_data$`Online_account`)
+imp_data$`Opt_In_Mail` = as.factor(imp_data$`Opt_In_Mail`)
+imp_data$`Opt_In_Post` = as.factor(imp_data$`Opt_In_Post`)
+imp_data$`Opt_In_Tel` = as.factor(imp_data$`Opt_In_Tel`)
+imp_data$Market_area = as.factor(imp_data$Market_area)
+imp_data$`MA_Grundversorger` = as.factor(imp_data$`MA_Grundversorger`)
+imp_data$`MA_Erweitert` = as.factor(imp_data$`MA_Erweitert`)
+imp_data$`MA_Restlich` = as.factor(imp_data$`MA_Restlich`)
+imp_data$Recovered = as.factor(imp_data$Recovered)
+imp_data$Churn = as.character(imp_data$Churn)
+imp_data$Churn[imp_data$Churn == "0"] = "No"
+imp_data$Churn[imp_data$Churn == "1"] = "Yes"
+imp_data$Churn = as.factor(imp_data$Churn)
+imp_data$DBII = gsub(",", ".", imp_data$DBII)
+imp_data$DBII = as.numeric(imp_data$DBII)
+imp_data$Customer_since_interval = as.numeric(imp_data$Customer_since_interval)
+imp_data$Contract_start_date_interval = as.numeric(imp_data$Contract_start_date_interval)
+
+# Feature Engineering
+# Create feature "not_opted" 
+# data[Opt_In_Mail == "0" & Opt_In_Post == "0" & Opt_In_Tel == "0", .N, by= Churn] 
+#However, only non-churners have this combination, therefore this new feature would not be meaningful
+
+#Create feature "international"
+imp_data$`International` = unlist(gregexpr("[0-9]{5}", imp_data$`Zip_code`)) # Nochmal überprüfen, kurze PLZ müssen nicht unbedingt im Ausland sein
+imp_data$`International`[imp_data$`International` == 1] = 0
+imp_data$`International`[imp_data$`International` == -1] = 1
+
+imp_data[ International == 1, .N, by = MA_Erweitert] # Auch checken, ob erweiterten Netzgebiet
+imp_data[ International == 1, .N, by = MA_Restlich] 
+
+#Create feature "annual payment"
+imp_data$`Actual_payment` = imp_data$Payment_on_account * 12 + imp_data$Annual_account
+
+#Create feature "Continuous relationship"
+imp_data$`Continuous_relationship` = ifelse(imp_data$Contract_start_date==imp_data$Customer_since, 1,0)
+imp_data$Continuous_relationship = as.factor(imp_data$Continuous_relationship)
+
+
+# Final Set of Features 
+
+imp_data = imp_data[, .(Churn, 
+                Client_type, 
+                Bill_shock, 
+                Online_account, 
+                Opt_In_Mail, 
+                Opt_In_Post, 
+                Opt_In_Tel, 
+                MA_Grundversorger,
+                MA_Erweitert,
+                MA_Restlich,
+                Recovered, 
+                Continuous_relationship, 
+                Age, 
+                Duration_of_customer_relationship, 
+                Consumption, 
+                Notice_period, 
+                Annual_account, 
+                DBII, 
+                Minimum_contract_term, 
+                Customer_since_interval,
+                Contract_start_date_interval)]
+
+#
 data_rf = imp_data
 data_rf$Churn = as.factor(data_rf$Churn)
 
 apply(data_rf[Client_type == 0], 2, function(col)sum(is.na(col))/length(col))
+# Because for firms there are NA's in age, eliminate those from those dataset 
 data_rf_no_na = data_rf[Client_type == 0]
 
 # Convert factor names of Churn to caret compatible format (1 and 0 are not allowed)
@@ -527,13 +610,15 @@ levels(data_rf_no_na$Churn)
 data_rf_no_na$Churn = factor(data_rf_no_na$Churn, levels = c("Yes", "No"))
 levels(data_rf_no_na$Churn)
 
+# Do Training and Test Split for Random Forest
+
 
 # Smote
 cv_rf <- trainControl(method = "cv", number = 5,
                               summaryFunction = twoClassSummary,
                               classProbs = TRUE,
                               allowParallel=TRUE,
-                              sampling = "smote") # Use Subsampling due to class imbalance
+                              sampling = "down") # Use Subsampling due to class imbalance
 
 # Define Hyperparameter Grid; changeable parameters: nrounds, max_depth, eta, gamma, colsample_bytree, min_child_weight, subsample
 rf_grid <- expand.grid(mtry= c(50,100,150,200)) 
@@ -545,7 +630,7 @@ xgb_tune <- train(x= data_rf_no_na[, -1],
                   method="rf",
                   trControl=cv_rf,
                   tuneGrid=rf_grid,
-                  metric="Kappa" # Keep or maybe use taylored method 
+                  metric="ROC" 
 )
 
 
@@ -709,15 +794,19 @@ h2o_data$Churn = factor(h2o_data$Churn, levels = c("Ja", "Nein"))
 levels(h2o_data$Churn)
 
 # Create training, validation and test set
-set.seed(789)
+set.seed(1470)
 split1 <- createDataPartition(h2o_data$Churn, p=.6, list=FALSE)
 h2o_train_data <- h2o_data[split1,]
 other  <- h2o_data[-split1,]
 
-set.seed(2342)
+set.seed(698)
 split2 <- createDataPartition(other$Churn, p=.5, list=FALSE)
 h2o_eval_data = other[split2,]
 h2o_test_data = other[-split2,]
+
+h2o_eval_data[,.N, by = Churn]
+h2o_test_data[,.N, by = Churn]
+
 
 # Approaches to fix
 # Use 100% training data and cv with 5 folds 
@@ -741,18 +830,28 @@ summary(valid_hf$Churn, exact_quantiles = TRUE)
 summary(test_hf$Churn, exact_quantiles = TRUE) 
 
 # Define what is the positive class
-train_hf$Churn = h2o.relevel(train_hf$Churn, "Yes")
+train_hf$Churn = h2o.relevel(train_hf$Churn, "Ja")
 
 aml <- h2o.automl(x = features, 
                   y = response,
                   training_frame = train_hf,
                   validation_frame = valid_hf,
-                  balance_classes = T,
+                  balance_classes = TRUE, # Make sure that set to TRUE
                   sort_metric = "AUC", 
-                  max_runtime_secs = 21600)
+                  max_runtime_secs = 3200)
 
 # View the AutoML Leaderboard
 lb <- aml@leaderboard
+View(lb)
+
+# Attempt to export model that is best based on own metric
+# h2o.exportHDFS()
+# h2o.make_metrics
+
+
+# Save model that is best in regards of crm_eval_correct
+aml@leaderboard # To Do 
+
 
 best_model <- aml@leader
 
@@ -773,16 +872,10 @@ plot(perf)
 
 # Metrics Overview
 metrics <- as.data.table(h2o.metric(perf))
-metrics$crm_eval_correct = 3*(metrics$tns/(metrics$tns+metrics$fps))+(metrics$tps)/(metrics$tps+metrics$fns)
+metrics$crm_eval_correct = 3*(metrics$tns/(metrics$tns+metrics$fps))+(metrics$tps)/(metrics$tps+metrics$fns) # max 1. 3.094811
 metrics$crm_eval = 3*metrics$recall + metrics$specificity # Calculation is not correct 
 metrics[max(crm_eval)]
 View(metrics) 
-
-# Mean per class error
-# h2o.mean_per_class_error(best_model, train = TRUE, valid = TRUE, xval = TRUE)
-# h2o.auc(best_model, train = TRUE)
-# h2o.auc(best_model, valid = TRUE)
-# h2o.auc(best_model, xval = TRUE)
 
 # Metrics Plot
 metrics %>%
@@ -796,6 +889,12 @@ recall = h2o.recall() #insert H20ModelMetrics Object
 specificity = h2o.specificity()
 # Compute final metricö
 final_metric = 3*recall+specificity 
+
+# Mean per class error
+# h2o.mean_per_class_error(best_model, train = TRUE, valid = TRUE, xval = TRUE)
+# h2o.auc(best_model, train = TRUE)
+# h2o.auc(best_model, valid = TRUE)
+# h2o.auc(best_model, xval = TRUE)
 
 # e_2) Gradient Boosting Machine -------
 
