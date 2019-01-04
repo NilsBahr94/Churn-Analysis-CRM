@@ -1,5 +1,11 @@
 # Install Packages --------------------------------------------------------
 
+
+install.packages("DMwR")
+install.packages("ROSE")
+
+install.packages("rpart")
+install.packages("hdbscan")
 install.packages("plyr")
 install.packages("DMwR")
 install.packages("readxl")
@@ -50,6 +56,8 @@ install.packages("h2o", type="source", repos="http://h2o-release.s3.amazonaws.co
 
 # Load Packages ------------------------------------------------------------
 
+require(rpart)
+require(dbscan)
 require(plyr)
 require(DMwR)
 require(readxl)
@@ -57,6 +65,8 @@ require(tidyverse)
 require(data.table)
 require(ggplot2)
 require(caret)
+require(DMwR)
+require(ROSE)
 
 require(xgboost)
 # require(klaR)
@@ -503,8 +513,23 @@ randomForest(Churn ~ ., data=train_data[, -1], ntree = 300)
 
 # Extensive Modeling --------------------------------------------------------
 
+# a) SVM -------------------
 
-# a) Random Forest -------------------
+
+# b) Decision Tree (CART) -------------------
+
+# Try to implement with caret 
+
+# Check Data Preprocessing techniques
+
+# post-pruning with rpart
+m <- rpart(repaid ~ credit_score + request_amt,
+           data = loans,
+           method = "class")
+plotcp(m)
+m_pruned <- prune(m, cp = 0.20)
+
+# c) Random Forest -------------------
 
 # Only possible with imputed data because NA's are no acepted
 
@@ -598,6 +623,8 @@ data_rf$Churn = as.factor(data_rf$Churn)
 apply(data_rf[Client_type == 0], 2, function(col)sum(is.na(col))/length(col))
 # Because for firms there are NA's in age, eliminate those from those dataset 
 data_rf_no_na = data_rf[Client_type == 0]
+apply(data_rf_no_na, 2, function(col)sum(is.na(col))/length(col))
+
 
 # Convert factor names of Churn to caret compatible format (1 and 0 are not allowed)
 data_rf_no_na$Churn = as.character(data_rf_no_na$Churn)
@@ -612,29 +639,47 @@ levels(data_rf_no_na$Churn)
 
 # Do Training and Test Split for Random Forest
 
+# Create training, validation and test set
+set.seed(156)
+split1 <- createDataPartition(data_rf_no_na$Churn, p=.7, list=FALSE)
+data_rf_train <- data_rf_no_na[split1,]
+data_rf_test  <- data_rf_no_na[-split1,]
 
-# Smote
-cv_rf <- trainControl(method = "cv", number = 5,
+# Downsampling
+cv_rf_down <- trainControl(method = "cv", number = 5,
                               summaryFunction = twoClassSummary,
                               classProbs = TRUE,
                               allowParallel=TRUE,
                               sampling = "down") # Use Subsampling due to class imbalance
 
+cv_rf_smote <- trainControl(method = "cv", number = 5,
+                           summaryFunction = twoClassSummary,
+                           classProbs = TRUE,
+                           allowParallel=TRUE,
+                           sampling = "smote") # Use Subsampling due to class imbalance
+
+
 # Define Hyperparameter Grid; changeable parameters: nrounds, max_depth, eta, gamma, colsample_bytree, min_child_weight, subsample
-rf_grid <- expand.grid(mtry= c(50,100,150,200)) 
+rf_grid <- expand.grid(mtry= c(10, 20, 25, 30, 35, 40, 50)) 
 
 # Train Model
 set.seed(45)
-xgb_tune <- train(x= data_rf_no_na[, -1],
-                  y= as.factor(data_rf_no_na$Churn),
+rf_model <- train(x= data_rf_train[, -1],
+                  y= as.factor(data_rf_train$Churn),
                   method="rf",
                   trControl=cv_rf,
                   tuneGrid=rf_grid,
-                  metric="ROC" 
-)
+                  metric="ROC")
 
+rf_model
+rf_model_results = as.data.table(rf_model$results)
+rf_model_results$crm_eval = 3*rf_model_results$Sens + rf_model_results$Spec
+rf_model_results[max(rf_model_results$crm_eval)]
 
-# b) XGBoost -------------------
+pred_rf = predict(rf_model, newdata = data_rf_test[,-1])
+confusionMatrix(pred_rf, data_rf_test[,1])
+
+# d) XGBoost -------------------
 
 ## Data Preprocessing XGBoost --------
 
@@ -694,40 +739,57 @@ xgb_test_test = other[-split2,]
 
 # Different forms of sampling to deal with the unbalanced data 
 # Down sampling
-cv_ctrl_down <- trainControl(method = "cv", number = 5,
+cv_ctrl_down <- trainControl(method = "cv", number = 10,
                             summaryFunction = twoClassSummary,
                             classProbs = TRUE,
                             allowParallel=TRUE,
                             sampling = "down") # Use Subsampling due to class imbalance
 
+# Up sampling
+cv_ctrl_up <- trainControl(method = "cv", number = 10,
+                             summaryFunction = twoClassSummary,
+                             classProbs = TRUE,
+                             allowParallel=TRUE,
+                             sampling = "up") # Use Subsampling due to class imbalance
+
 # SMOTE
-cv_ctrl_smote <- trainControl(method = "cv", number = 5,
+cv_ctrl_smote <- trainControl(method = "cv", number = 10,
                               summaryFunction = twoClassSummary,
                               classProbs = TRUE,
                               allowParallel=TRUE,
                               sampling = "smote") # Use Subsampling due to class imbalance
 
+# ROSE
+cv_ctrl_rose <- trainControl(method = "cv", number = 10,
+                              summaryFunction = twoClassSummary,
+                              classProbs = TRUE,
+                              allowParallel=TRUE,
+                              sampling = "rose")
+
 # Define Hyperparameter Grid 
 # changeable parameters: nrounds, max_depth, eta, gamma, colsample_bytree, min_child_weight, subsample
-xgb_grid <- expand.grid(nrounds = c(10, 20, 50, 100, 200),
-                        max_depth = c(2, 3, 4, 6, 8),
-                        eta = c(0.01, 0.05, 0.1, 0.3),
-                        gamma = 0,
-                        colsample_bytree = 1,
-                        min_child_weight = 1,
-                        subsample = 1)  
+xgb_grid <- expand.grid(nrounds = c(10, 20, 50, 100),
+                        max_depth = c(1, 2, 3, 4, 6),
+                        eta = c(0.005, 0.01, 0.05, 0.1),
+                        gamma = c(0, 0.1, 0.2),
+                        colsample_bytree = c(0.4, 0.6, 1),
+                        min_child_weight = c(1, 2, 3),
+                        subsample = 1)
 
 # Train Model
 set.seed(45)
 
 xgb_tune <- train(x= as.matrix(xgb_train_data[, -1]),
-                    y= as.factor(xgb_train_data$Churn),
-                    method="xgbTree",
-                    trControl=cv_ctrl_down,  #change between cv_ctrl_smote & cv_ctrl_down # downsampling works much better
-                    tuneGrid=xgb_grid,
-                    verbose=T,
-                    metric="ROC", # Keep or maybe use taylored method 
-                    nthread =3)
+                  y= as.factor(xgb_train_data$Churn),
+                  method="xgbTree",
+                  trControl=cv_ctrl_rose,  #change between cv_ctrl_smote & cv_ctrl_down # downsampling works much better
+                  tuneGrid=xgb_grid,
+                  verbose=T,
+                  metric="ROC", # Keep or maybe use taylored method 
+                  nthread =3)
+
+###  Model Predictions and Performance
+
 
 # Evaluate performance
 print(xgb_tune)
@@ -739,10 +801,6 @@ View(xgb_tune_results)
 
 xgb_tune$bestTune
 
-###  Model Predictions and Performance
-# Make predictions using the test data set
-gbm.pred <- predict(xgb_tune,testX)
-
 #Look at the confusion matrix  
 confusionMatrix(gbm.pred,testData$Class) 
 
@@ -751,31 +809,22 @@ evalResults$xgb <- predict(xgb_tune,
                            newdata = xgb_eval_data[,-1],
                            type = "prob")
 
-xgb_pred = predict(xgb_tune,
-             newdata = xgb_eval_data[,-1])
+# To Do: Actually it does not make sense to use evaluation daa again since cross validation already allows to draw conclusions of the model performance
+
+xgb_pred = predict(xgb_tune, newdata = xgb_eval_data[,-1])
 
 confusionMatrix(xgb_pred, xgb_eval_data$Churn)
 
 
-
-# d) Logistic Regression ------------
-
-# define training control
-train_control <- trainControl(method = "cv", number = 5)
-
-# train the model on training set
-model <- train(Churn ~ Client_type + Duration_of_customer_relationship,
-               data = data,
-               trControl = train_control,
-               method = "glm",
-               na.action = na.pass,
-               family=binomial())
+# e) Anomaly Detection ------------
 
 # print cv scores
 summary(model)
 
+# f) GLM
 
-# e) H2o ---------------------------------------------------------------------
+
+# f) H2o ---------------------------------------------------------------------
 
 
 # e_1) All models -------
@@ -830,15 +879,15 @@ summary(valid_hf$Churn, exact_quantiles = TRUE)
 summary(test_hf$Churn, exact_quantiles = TRUE) 
 
 # Define what is the positive class
-train_hf$Churn = h2o.relevel(train_hf$Churn, "Ja")
+train_hf$Churn = h2o.relevel(train_hf$Churn, "No") # Change to Yes
 
 aml <- h2o.automl(x = features, 
                   y = response,
                   training_frame = train_hf,
                   validation_frame = valid_hf,
-                  balance_classes = TRUE, # Make sure that set to TRUE
+                  balance_classes = T, # Make sure that set to TRUE
                   sort_metric = "AUC", 
-                  max_runtime_secs = 3200)
+                  max_runtime_secs = 90)
 
 # View the AutoML Leaderboard
 lb <- aml@leaderboard
@@ -860,6 +909,8 @@ h2o.saveModel(best_model, "C:\\Users\\nilsb\\sciebo\\Master\\3. Semester\\CRM an
 # Prediction
 pred <- h2o.predict(best_model, test_hf[, -1])
 
+confusionMatrix(pred, h2o_test_data[,-1])
+
 # Evaluation
 # https://www.rdocumentation.org/packages/h2o/versions/2.4.3.11/topics/h2o.performance
 # Optimize for 3*Sensitivity (Recall) + Specificity (Selectivity)
@@ -879,7 +930,7 @@ View(metrics)
 
 # Metrics Plot
 metrics %>%
-  gather(x, y, f1:tpr) %>%
+  gather(x, y, f1:crm_eval_correct) %>%
   ggplot(aes(x = threshold, y = y, group = x)) +
   facet_wrap(~ x, ncol = 2, scales = "free") +
   geom_line()
