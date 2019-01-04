@@ -940,8 +940,9 @@ plot(perf)
 #Select subset of features (namely all except for client_ID and Zip_code)
 churners = data[which(data$Churn=="Yes"),]
 
-cluster_df = (churners[,c("Client_type", 
-                          "Age", 
+private_churners <- churners[which(churners$Client_type==0),]
+
+cluster_df = (private_churners[,c("Age", 
                           "Duration_of_customer_relationship", 
                           "Minimum_contract_term", 
                           "Consumption", 
@@ -954,14 +955,11 @@ cluster_df = (churners[,c("Client_type",
                           "Opt_In_Tel", 
                           "Recovered", 
                           "DBII", 
-                          
-                          "International", 
                           "MA_Grundversorger", 
                           "MA_Erweitert", 
                           "MA_Restlich")])
 
 #Transform to numeric features
-cluster_df$Client_type = as.numeric(cluster_df$Client_type)
 cluster_df$Age = as.numeric(cluster_df$Age)
 cluster_df$Duration_of_customer_relationship = as.numeric(cluster_df$Duration_of_customer_relationship)
 cluster_df$Minimum_contract_term = as.numeric(cluster_df$Minimum_contract_term)
@@ -975,19 +973,18 @@ cluster_df$Opt_In_Post = as.numeric(cluster_df$Opt_In_Post)
 cluster_df$Opt_In_Tel = as.numeric(cluster_df$Opt_In_Tel)
 cluster_df$Recovered = as.numeric(cluster_df$Recovered)
 cluster_df$DBII = as.numeric(cluster_df$DBII)
-cluster_df$International = as.numeric(cluster_df$International)
 cluster_df$MA_Grundversorger = as.numeric(cluster_df$MA_Grundversorger)
 cluster_df$MA_Erweitert = as.numeric(cluster_df$MA_Erweitert)
 cluster_df$MA_Restlich = as.numeric(cluster_df$MA_Restlich)
 
-#Execute HDBSCAN clustering algorithm
-hdb <- hdbscan(cluster_df, minPts = 10)
+#Scale values for clustering algorithm
+scaled_ds <- scale(cluster_df)
 
-hdb$cluster
+#Execute HDBSCAN clustering algorithm for private customers churners
+hdb <- hdbscan(scaled_ds, minPts = 10)
+plot(hdb, show_flat = TRUE)
 
-plot(hdb)
-
-result = cbind(test[test$Churn==1,], hdb$cluster)
+cs_result = cbind(churners[churners$Client_type==0,], "Cluster" = hdb$cluster)
 
 # Import 2018 Data ----------------------------------------------------------------
 
