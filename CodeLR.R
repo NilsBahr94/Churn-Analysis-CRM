@@ -29,6 +29,7 @@ install.packages("MLmetrics")
 install.packages("ISLR")
 install.packages("randomForest")
 install.packages("gridExtra")
+install.packages('zeligverse')
 # Install dependencies for H20
 install.packages("RCurl")
 install.packages("bitops")
@@ -81,7 +82,7 @@ library(MLmetrics)
 library(ISLR)
 library(randomForest)
 require(lubridate)
-
+require(zeligverse)
 # Dependencies for H20
 require(RCurl)
 require(bitops)
@@ -96,11 +97,11 @@ library(h2o)
 # data_2017 = read_excel("Data/Data January 2017.xlsx", na = "-", col_types = c("text","guess","guess","text","guess","guess","guess","guess","guess","guess","guess","numeric","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess"))
 # write.csv2(data_2017, "Data/Data_January_2017_3.csv")
 
-# L
+L
 data = fread("Data/Data_January_2017_3.csv", na.strings = "NA", dec = ",")
 
 # N
-data = fread("Data\\Data_January_2017_3.csv", na.strings = "NA", dec = ",")
+#data = fread("Data\\Data_January_2017_3.csv", na.strings = "NA", dec = ",")
 
 
 #remove title and V1 from the data set
@@ -464,8 +465,20 @@ summary(m_2)
 anova(m_2, test="Chisq")
 vif(m_2)
 
+
+#Rare events logistic regression (ReLogit)
+
+install.packages("Zelig")
+require(Zelig)
+
+m_re <- zelig(Churn ~., tau = NULL, model = "relogit", bias.correct = TRUE, data = train_data)
+
 #Model backward and forward selection
 
 m_2_bth <- stepAIC(m_2, direction="backward", trace = FALSE)
 summary(m_2_bth)
 g_2_bth$anova
+
+
+
+
