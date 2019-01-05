@@ -3,7 +3,7 @@
 
 install.packages("DMwR")
 install.packages("ROSE")
-
+install.packages("glmnet")
 install.packages("rpart")
 install.packages("hdbscan")
 install.packages("plyr")
@@ -67,6 +67,7 @@ require(ggplot2)
 require(caret)
 require(DMwR)
 require(ROSE)
+require(glmnet)
 
 require(xgboost)
 # require(klaR)
@@ -334,6 +335,8 @@ cor(data$age,data$Duration_of_customer_relationship)
 
 # Data Exploration ----------------------------------------------------------
 
+table(data$Churn) / nrow(data)
+
 str(data)
 summary(data)
 
@@ -470,17 +473,6 @@ levels(data$Churn)
 data$Churn = factor(data$Churn, levels = c("Yes", "No"))
 levels(data$Churn)
 
-# Create training, validation and test set
-set.seed(156)
-split1 <- createDataPartition(data$Churn, p=.6, list=FALSE)
-train_data <- data[split1,]
-other  <- data[-split1,]
-
-set.seed(234)
-split2 <- createDataPartition(other$Churn, p=.5, list=FALSE)
-eval_data = other[split2,]
-test_test = other[-split2,]
-
 # Do *one* of the next two approaches
 # 1) Create training, validation and test set
 set.seed(156)
@@ -502,59 +494,105 @@ test_data = other[-split2,]
 # Extensive Modeling --------------------------------------------------------
 
 
-# GLM ---------------------------------------------------------------------
-
-glmnet
+# a) GLM ---------------------------------------------------------------------
 
 # Also have different presampling methods available and try them out one after the other
 # GLM work good with small dataset, with resampling dataset becomes small indeed
 
-myControl <- trainControl(
-  method = "cv", number = 10,
-  summaryFunction = twoClassSummary,
-  classProbs = TRUE, # Super important!
-  verboseIter = TRUE)
+glm_grid <- expand.grid(alpha= c(0, 0.2, 0.4, 0.6, 0.8),
+                        lambda = c(0.0001, 0.001, 0.1))
 
-# a) SVM -------------------
+glm_tc = trainControl(method = "cv", number = 5,
+                      summaryFunction = twoClassSummary,
+                      classProbs = TRUE, # Super important!
+                      verboseIter = FALSE,
+                      sampling = "down")
 
-# b) Decision Tree (CART) -------------------
+# GLM Model only works when NA's are excluded
+train_data_ex_NA = na.omit(train_data)
 
-scale_train = scale(train_data[,-1])
-scale_test = scale(test_data[,-1])
+set.seed(42)
+glm_model = train(x= train_data_ex_NA[, -1],
+                 y= train_data_ex_NA$Churn,
+                 method="glmnet",
+                 trControl=glm_tc,
+                 tuneGrid=glm_grid,
+                 metric="ROC") # ROC, Kappa does not work
 
-library(rpart)
-classifier = rpartxgb_train_data(formula = Churn ~ .,
-                   data = train_data)
-
-dt_model = 
-  train(x= [, -1]),
-        y= as.factor(xgb_train_data$Churn),
-        method="xgbTree",
-        trControl=resampling_method,  #change between cv_ctrl_smote, cv_ctrl_down, cv_ctrl_up, cv_ctrl_rose 
-        tuneGrid=tune_grid,
-        verbose=T,
-        metric="ROC", # ROC, Kappa does not work
-        nthread =3)
-
-classifier_pruned <- prune(classifier, cp = 0.20)
+print(glm_model)
+plot(glm_model)
 
 # Predicting the Test set results
-y_pred = predict(classifier_pruned, newdata = test_data[,-1], type = 'class')
+test_data_ex_NA = na.omit(test_data)
+glm_pred = predict(glm_model, newdata = test_data_ex_NA[,-1], type = 'raw')
+
+confusionMatrix(glm_pred, test_data_ex_NA$Churn)
+
+glm_model_results = as.data.table(glm_model$results)
+glm_model_results$crm_eval = 3*glm_model_results$Sens + glm_model_results$Spec
+max(glm_model_results$crm_eval)
+
+# b) SVM -------------------
+
+# Data Preprocessing for SVM: scale data to [-1, 1]
+# Training Data
+scale_train_data = as.data.table(ReScaling(train_data[, 13:21], t.mn = -1, t.mx = 1)) # Scale continous feature
+scale_train_data = cbind(scale_train_data, train_data[, 1:12])
+
+# Test Data
+scale_test_data = as.data.table(ReScaling(test_data[, 13:21], t.mn = -1, t.mx = 1)) # Scale continous feature
+scale_test_data = cbind(scale_test_data, test_data[, 1:12])
+
+# Modeling
+svm_grid <- expand.grid(cp= seq(0, 0.8, length = 10)) 
+svm_tc <- trainControl(method = "cv", number = 5,
+                      summaryFunction = twoClassSummary,
+                      classProbs = TRUE,
+                      allowParallel=TRUE,
+                      sampling = "down") # Use Subsampling due to class imbalance
+
+svm_model = train(x= scale_train_data[, -1],
+                 y= scale_train_data$Churn,
+                 method="rpart",
+                 trControl=dt_tc,
+                 tuneGrid=dt_grid,
+                 metric="ROC") # ROC, Kappa does not work
+
+install.packages("kernlab")
+require(kernlab)
+
+# c) Decision Tree -------------------
+
+dt_grid <- expand.grid(cp= seq(0, 0.8, length = 10)) 
+dt_tc <- trainControl(method = "cv", number = 5,
+                           summaryFunction = twoClassSummary,
+                           classProbs = TRUE,
+                           allowParallel=TRUE,
+                           sampling = "down") # Use Subsampling due to class imbalance
+
+dt_model = train(x= train_data[, -1],
+        y= train_data$Churn,
+        method="rpart",
+        trControl=dt_tc,
+        tuneGrid=dt_grid,
+        metric="ROC") # ROC, Kappa does not work
+
+print(dt_model)
+plot(dt_model)
+
+# Predicting the Test set results
+y_pred = predict(dt_model, newdata = test_data[,-1], type = 'raw')
 
 confusionMatrix(y_pred, test_data$Churn)
 
-# Try to implement with caret 
+dt_model_results = as.data.table(dt_model$results)
+dt_model_results$crm_eval = 3*dt_model_results$Sens + dt_model_results$Spec
+max(dt_model_results$crm_eval)
 
-# post-pruning with rpart
-m <- rpart(Churn ~ .,
-           data = train_data,
-           method = "class")
-plotcp(m)
-m_pruned <- prune(m, cp = 0.20)
 
-# c) Random Forest -------------------
+# d) Random Forest -------------------
 
-# Only possible with imputed data because NA's are no acepted
+# Only possible with imputed data because NAs are no accepted
 
 imp_data= fread("C:\\Users\\nilsb\\sciebo\\Master\\3. Semester\\CRM and Direct Marketing\\Project\\Churn-Analysis-CRM\\Data\\Data_January_2017_3_imputed.csv")
 
@@ -639,7 +677,6 @@ imp_data = imp_data[, .(Churn,
                 Customer_since_interval,
                 Contract_start_date_interval)]
 
-
 data_rf = imp_data
 data_rf$Churn = as.factor(data_rf$Churn)
 
@@ -668,17 +705,11 @@ data_rf_train <- data_rf_no_na[split1,]
 data_rf_test  <- data_rf_no_na[-split1,]
 
 # Downsampling
-cv_rf_down <- trainControl(method = "cv", number = 5,
+cv_rf <- trainControl(method = "cv", number = 5,
                               summaryFunction = twoClassSummary,
                               classProbs = TRUE,
                               allowParallel=TRUE,
-                              sampling = "down") # Use Subsampling due to class imbalance
-
-cv_rf_smote <- trainControl(method = "cv", number = 5,
-                           summaryFunction = twoClassSummary,
-                           classProbs = TRUE,
-                           allowParallel=TRUE,
-                           sampling = "smote") # Use Subsampling due to class imbalance
+                              sampling = "rose") # Use Subsampling due to class imbalance
 
 
 # Define Hyperparameter Grid; changeable parameters: nrounds, max_depth, eta, gamma, colsample_bytree, min_child_weight, subsample
@@ -694,14 +725,15 @@ rf_model <- train(x= data_rf_train[, -1],
                   metric="ROC")
 
 rf_model
+plot(rf_model)
 rf_model_results = as.data.table(rf_model$results)
 rf_model_results$crm_eval = 3*rf_model_results$Sens + rf_model_results$Spec
-rf_model_results[max(rf_model_results$crm_eval)]
+max(rf_model_results$crm_eval)
 
 pred_rf = predict(rf_model, newdata = data_rf_test[,-1])
-confusionMatrix(pred_rf, data_rf_test[,1])
+confusionMatrix(pred_rf, data_rf_test$Churn)
 
-# d) XGBoost Caret -------------------
+# e) XGBoost Caret -------------------
 
 xgb_train_data = train_data
 # xgb_eval_data = eval_data
@@ -802,8 +834,6 @@ evalResults$xgb <- predict(xgb_tune,
 
 # f) H2o ---------------------------------------------------------------------
 
-# f_1) All models -------
-
 # 2) Training, validation, test set
 set.seed(365)
 split1 <- createDataPartition(data$Churn, p=.6, list=FALSE)
@@ -894,41 +924,10 @@ metrics %>%
   geom_line()
 
 
-# f_2) Gradient Boosting Machine -------
-
-h2o_gbm <- h2o.gbm(x = features, 
-                  y = response,
-                  training_frame = train_hf,
-                  nfolds = 5,
-                  # validation_frame = valid_hf,
-                  balance_classes = TRUE, # Make sure that set to TRUE
-                  max_runtime_secs = 240)
 
 
-pred <- h2o.predict(h2o_gbm, test_hf[, -1])
-
-# Confusion matrix on validation data
-perf <- h2o.performance(h2o_gbm, test_hf) 
-h2o.confusionMatrix(perf)
-plot(perf)
 
 
-# f3) GLM -----------------------------------------------------------------
-
-h2o_glm = h2o.glm(x = features, 
-                  y = response,
-                  training_frame = train_hf,
-                  nfolds = 5,
-                  # validation_frame = valid_hf,
-                  balance_classes = TRUE, # Make sure that set to TRUE
-                  max_runtime_secs = 240)
-
-pred <- h2o.predict(h2o_glm, test_hf[, -1])
-
-# Confusion matrix on validation data
-perf <- h2o.performance(h2o_glm, test_hf) 
-h2o.confusionMatrix(perf)
-plot(perf)
 
 
 
@@ -995,6 +994,7 @@ data_2018 = fread("Data\\Data_November_2018.csv", na.strings = "-")
 
 
 # Deprecated --------------------------------------------------------------
+
 
 
 # Multiple Imputation 
@@ -1238,3 +1238,39 @@ xgb_test_test = other[-split2,]
 # h2o.auc(best_model, train = TRUE)
 # h2o.auc(best_model, valid = TRUE)
 # h2o.auc(best_model, xval = TRUE)
+
+# f3) GLM 
+
+h2o_glm = h2o.glm(x = features, 
+                  y = response,
+                  training_frame = train_hf,
+                  nfolds = 5,
+                  # validation_frame = valid_hf,
+                  balance_classes = TRUE, # Make sure that set to TRUE
+                  max_runtime_secs = 240)
+
+pred <- h2o.predict(h2o_glm, test_hf[, -1])
+
+# Confusion matrix on validation data
+perf <- h2o.performance(h2o_glm, test_hf) 
+h2o.confusionMatrix(perf)
+plot(perf)
+
+
+# f_2) Gradient Boosting Machine
+
+h2o_gbm <- h2o.gbm(x = features, 
+                   y = response,
+                   training_frame = train_hf,
+                   nfolds = 5,
+                   # validation_frame = valid_hf,
+                   balance_classes = TRUE, # Make sure that set to TRUE
+                   max_runtime_secs = 240)
+
+
+pred <- h2o.predict(h2o_gbm, test_hf[, -1])
+
+# Confusion matrix on validation data
+perf <- h2o.performance(h2o_gbm, test_hf) 
+h2o.confusionMatrix(perf)
+plot(perf)
