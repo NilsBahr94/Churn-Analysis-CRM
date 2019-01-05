@@ -1,6 +1,6 @@
 # Install Packages --------------------------------------------------------
 
-
+install.packages("kernlab")
 install.packages("DMwR")
 install.packages("ROSE")
 install.packages("glmnet")
@@ -56,6 +56,7 @@ install.packages("h2o", type="source", repos="http://h2o-release.s3.amazonaws.co
 
 # Load Packages ------------------------------------------------------------
 
+require(kernlab)
 require(rpart)
 require(dbscan)
 require(plyr)
@@ -536,30 +537,46 @@ max(glm_model_results$crm_eval)
 
 # Data Preprocessing for SVM: scale data to [-1, 1]
 # Training Data
-scale_train_data = as.data.table(ReScaling(train_data[, 13:21], t.mn = -1, t.mx = 1)) # Scale continous feature
-scale_train_data = cbind(scale_train_data, train_data[, 1:12])
+scale_train_data = as.data.table(ReScaling(train_data[, 13:21], t.mn = -1, t.mx = 1)) # Scale continuous feature
+scale_train_data = cbind(train_data[, 1:12], scale_train_data)
 
 # Test Data
-scale_test_data = as.data.table(ReScaling(test_data[, 13:21], t.mn = -1, t.mx = 1)) # Scale continous feature
-scale_test_data = cbind(scale_test_data, test_data[, 1:12])
+scale_test_data = as.data.table(ReScaling(test_data[, 13:21], t.mn = -1, t.mx = 1)) # Scale continuous feature
+scale_test_data = cbind(test_data[, 1:12], scale_test_data)
 
-# Modeling
-svm_grid <- expand.grid(cp= seq(0, 0.8, length = 10)) 
+set.seed(743) 
+svm_grid <- expand.grid(sigma = c(0.05, 0.0456, 0.0577), C = c(1.5,1.596,1.65,1.89,1.95,2,2.2,2.44))
+
+require(e1071)
+svm_model = svm(x= as.matrix(scale_train_data[, -1]),
+                y= as.factor(scale_train_data$Churn),
+                scale = F,
+                kernel = "radial")
+
 svm_tc <- trainControl(method = "cv", number = 5,
                       summaryFunction = twoClassSummary,
                       classProbs = TRUE,
                       allowParallel=TRUE,
                       sampling = "down") # Use Subsampling due to class imbalance
 
-svm_model = train(x= scale_train_data[, -1],
-                 y= scale_train_data$Churn,
-                 method="rpart",
-                 trControl=dt_tc,
-                 tuneGrid=dt_grid,
-                 metric="ROC") # ROC, Kappa does not work
+# svm_model = train(x= scale_train_data[, -1],
+#                  y= scale_train_data$Churn,
+#                  method="svmRadial",
+#                  trControl=svm_tc,
+#                  tuneGrid=svm_grid,
+#                  metric="ROC") # ROC, Kappa does not work
 
-install.packages("kernlab")
-require(kernlab)
+print(svm_model)
+plot(svm_model)
+
+# Predicting the Test set results
+svm_pred = predict(svm_model, newdata = scale_test_data[,-1], type ="raw")
+
+confusionMatrix(svm_pred, scale_test_data$Churn)
+
+svm_model_results = as.data.table(svm_model$results)
+svm_model_results$crm_eval = 3*svm_model_results$Sens + svm_model_results$Spec
+max(svm_model_results$crm_eval)
 
 # c) Decision Tree -------------------
 
@@ -775,6 +792,13 @@ cv_ctrl_rose <- trainControl(method = "cv", number = 5,
                               allowParallel=TRUE,
                               sampling = "rose")
 
+# No resampling
+cv_ctrl_no <- trainControl(method = "cv", number = 5,
+                             summaryFunction = twoClassSummary,
+                             classProbs = TRUE,
+                             allowParallel=TRUE)
+
+
 # Different Hyperparameter Grid 
 # changeable parameters: nrounds, max_depth, eta, gamma, colsample_bytree, min_child_weight, subsample
 xgb_grid1 <- expand.grid(nrounds = c(10, 20, 50, 100),
@@ -809,7 +833,7 @@ xgb_model_resampling = function(resampling_method, tune_grid){
   return(xgb_model)
 } 
 
-xgb_tune = xgb_model_resampling(resampling_method=cv_ctrl_rose, tune_grid = xgb_grid2)
+xgb_tune = xgb_model_resampling(resampling_method=cv_ctrl_no, tune_grid = xgb_grid2)
 xgb_tune
 
 # Predict with final model
@@ -878,7 +902,10 @@ summary(valid_hf$Churn, exact_quantiles = TRUE)
 summary(test_hf$Churn, exact_quantiles = TRUE) 
 
 # Define what is the positive class
-# train_hf$Churn = h2o.relevel(train_hf$Churn, "Yes") # Change to Yes
+train_hf$Churn = h2o.relevel(train_hf$Churn, "No_Churn")
+valid_hf$Churn = h2o.relevel(valid_hf$Churn, "No_Churn")
+test_hf$Churn = h2o.relevel(test_hf$Churn, "No_Churn")
+
 
 # Modeling
 aml <- h2o.automl(x = features, 
@@ -886,7 +913,7 @@ aml <- h2o.automl(x = features,
                   training_frame = train_hf,
                   # nfolds = 5,
                   validation_frame = valid_hf,
-                  balance_classes = TRUE, # Make sure that set to TRUE
+                  balance_classes = F, # Make sure that set to TRUE
                   sort_metric = "AUC", 
                   max_runtime_secs = 3600)
 
@@ -912,23 +939,20 @@ plot(perf)
 # Metrics Overview
 metrics <- as.data.table(h2o.metric(perf))
 metrics$crm_eval_correct = 3*(metrics$tns/(metrics$tns+metrics$fps))+(metrics$tps)/(metrics$tps+metrics$fns) # max 1. 3.094811
-metrics$crm_eval = 3*metrics$recall + metrics$specificity # Calculation is not correct 
-metrics[max(crm_eval)]
+max(metrics$crm_eval_correct)
+metrics$crm_eval_final = 3*metrics$recall + metrics$specificity # Calculation is not correct 
+max(metrics$crm_eval_final)
 View(metrics) 
+
+metrics$crm_eval_correct = NULL
+
 
 # Metrics Plot
 metrics %>%
-  gather(x, y, f1:crm_eval_correct) %>%
+  gather(x, y, f1:crm_eval_final) %>%
   ggplot(aes(x = threshold, y = y, group = x)) +
   facet_wrap(~ x, ncol = 2, scales = "free") +
   geom_line()
-
-
-
-
-
-
-
 
 
 # Logistic Regression -----------------------------------------------------
