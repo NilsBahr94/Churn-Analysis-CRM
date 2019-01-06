@@ -243,6 +243,17 @@ private_customers <- complete(imp_data)
 
 data <- rbind(private_customers,corporate_customers)
 
+# Outlier ----------------------------------------------------------------
+
+# Outlier Detection & Elimination
+summary(data)
+
+# Set to NA, since we interprete these factors as not meaningful
+data$Age[data$Age >= 105] = NA 
+data$Age[data$Age < 18] = NA
+private_customers$Age[private_customers$Age >= 105] = NA 
+private_customers$Age[private_customers$Age < 18] = NA
+
 #Datasets for LR -------------
 #Dataset without ContractID, Zip_code, and Age
 data1 = data[, .(Churn, 
@@ -657,6 +668,10 @@ confusionMatrix(data = test_data$Pred_m_3_bth_re, reference= test_data$Churn, po
 auc(test_data$Churn, test_data$Prob_m_3_bth_re)
 
 #Logistic regression for private customers only -------------
+summary(private_customers)
+
+#Omit variables with missing values (due to Age under 18 or over 104)
+private_customers = na.omit(private_customers)
 
 #Delete Zip_code, Contract_ID and CLient_type from training and test dataset
 
@@ -699,43 +714,40 @@ vif(private_null_bth)
 
 #Build models with multiple variables in the model based on selection methods from classic logistic regression------
 
-test_data_private$Churn = as.integer(test_data_private$Churn) #Required to run relogit model
-test_data_private$Churn = test_data_private$Churn-1
-
 train_data_private$Churn = as.integer(train_data_private$Churn) #Required to run relogit model
 train_data_private$Churn = train_data_private$Churn-1
 
 private_full_bw_re <- zelig(Churn ~ Age + Minimum_contract_term + Consumption + Annual_account + 
                            Bill_shock + Market_area + Customer_since_interval + Contract_start_date_interval
-                         , tau = 194/49831, model = "relogit",  case.control = "prior", bias.correct = TRUE, data = train_data_private)
+                         , tau = 194/49831, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data_private)
 
 summary(private_full_bw_re)
 
 private_null_fw_re <- zelig(Churn ~ Customer_since_interval + Contract_start_date_interval + 
                               Market_area + Consumption + Age + Annual_account + Bill_shock + 
                               Minimum_contract_term
-                            , tau = 194/49831, model = "relogit",  case.control = "prior", bias.correct = TRUE, data = train_data_private)
+                            , tau = 194/49831, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data_private)
 
 summary(private_null_fw_re)
 
 #Model evaluation ---------------
 
 #Private_full_bw_re
-test_data_private$Churn <- as.factor(test_data_private$Churn)
-
-test_data_private$Prob_private_full_bw_re = predict(private_full_bw_re, test_data_private, type="response")
-test_data_private$Pred_private_full_bw_re <- ifelse(test_data_private$Prob_private_full_bw_re < 0.05,"0", "1")
+Prob_private_full_bw_re <- predict(private_full_bw_re, test_data_private, type="response")
+test_data_private$Prob_private_full_bw_re <- unlist(Prob_private_full_bw_re, use.names=FALSE)
+test_data_private$Pred_private_full_bw_re <- ifelse(test_data_private$Prob_private_full_bw_re < 0.005,"0", "1")
 test_data_private$Pred_private_full_bw_re <- as.factor(test_data_private$Pred_private_full_bw_re)
 confusionMatrix(data = test_data_private$Pred_private_full_bw_re, reference= test_data_private$Churn, positive = "1")
 
-  #Area under curve
+  #Area under curve = 0.7427
 auc(test_data_private$Churn, test_data_private$Prob_private_full_bw_re)
 
 #Private_null_fw_re
-test_data_private$Prob_private_null_fw_re = predict(private_null_fw_re, test_data_private, type="response")
+Prob_private_null_fw_re <- predict(private_null_fw_re, test_data_private, type="response")
+test_data_private$Prob_private_null_fw_re <- unlist(Prob_private_null_fw_re, use.names=FALSE)
 test_data_private$Pred_private_null_fw_re <- ifelse(test_data_private$Prob_private_null_fw_re < 0.05,"0", "1")
 test_data_private$Pred_private_null_fw_re <- as.factor(test_data_private$Pred_private_null_fw_re)
 confusionMatrix(data = test_data_private$Pred_private_null_fw_re, reference= test_data_private$Churn, positive = "1")
 
-  #Area under curve
+  #Area under curve = 0.7427
 auc(test_data_private$Churn, test_data_private$Prob_private_null_fw_re)
