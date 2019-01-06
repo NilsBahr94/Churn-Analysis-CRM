@@ -153,11 +153,9 @@ data$Online_account[is.na(data$Online_account)] = 0
 data$Recovered[data$`Recovered`=="X"] = 1
 data$Recovered[is.na(data$`Recovered`)] = 0
 
-#At 51 observations "Customer_since" starts later than "Contract start date" --> Replace "Customer_since" by "Contract_start_date"  
-nrow(subset(data,data$Customer_since>data$Contract_start_date)) 
-data$Customer_since <- if_else(data$Customer_since>data$Contract_start_date, data$Contract_start_date, data$Customer_since)
-
 #If "Contract_start_date"==NA, insert "Customer_since" as "Contract_start_date"
+data$`Customer_since` = ymd(data$`Customer_since`) 
+data$`Contract_start_date` = ymd(data$`Contract_start_date`)
 data$Contract_start_date <- if_else(is.na(data$Contract_start_date), data$Customer_since, data$Contract_start_date)
 
 #If "Customer_since"==NA, calculate "Customer_since" based on "Duration_of_customer_relationship"
@@ -167,12 +165,14 @@ data$Customer_since <- if_else(is.na(data$Customer_since),ymd(20170301)- months(
 nrow(subset(data, data$Customer_since <= ymd(20170101)))
 data <- subset(data, data$Customer_since <= ymd(20170101))
 
+#At 51 observations "Customer_since" starts later than "Contract start date" --> Replace "Customer_since" by "Contract_start_date"  
+nrow(subset(data,data$Customer_since>data$Contract_start_date)) 
+data$Customer_since <- if_else(data$Customer_since>data$Contract_start_date, data$Contract_start_date, data$Customer_since)
+
 #Transform "Customer_since" to number of months
-data$`Customer_since` = ymd(data$`Customer_since`) 
 data$`Customer_since_interval` = interval(ymd(data$`Customer_since`), ymd(20170201)) %/% months(1)
 
 #Transform "Contract_start_date" to number of months
-data$`Contract_start_date` = ymd(data$`Contract_start_date`)
 data$`Contract_start_date_interval` = interval(ymd(data$`Contract_start_date`), ymd(20170201)) %/% months(1)
 
 #Transform "Market area" to binary variables
