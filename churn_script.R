@@ -69,6 +69,7 @@ require(caret)
 require(DMwR)
 require(ROSE)
 require(glmnet)
+require(gridExtra)
 
 require(xgboost)
 # require(klaR)
@@ -112,8 +113,8 @@ data = fread("Data/Data_January_2017_3.csv", na.strings = "NA", dec = ",")
 # N
 data = fread("Data\\Data_January_2017_3.csv", na.strings = "NA", dec = ",")
 
-  #remove title and V1 from the data set
-  data = data[,c("Contract_ID", 
+#remove title and V1 from the data set
+data = data[,c("Contract_ID", 
                  "Client type", 
                  "Zip code", 
                  "Age", 
@@ -251,25 +252,28 @@ data$Continuous_relationship = as.factor(data$Continuous_relationship)
 # Imputation  --------------------------------------------------------------
 
 # Detect Percentage of NA's per feature
-apply(data, 2, function(col)sum(is.na(col))/length(col))
-md.pattern(data, plot= T)
-md.pairs(data)
-
-# Multiple Imputation (only for private customers)
-private_customers = subset(data[which(data$Client_type==0),])
-corporate_customers = subset(data[which(data$Client_type==1),])
-
-imp_data = mice(private_customers) 
-private_customers <- complete(imp_data)
-
-data <- rbind(private_customers,corporate_customers)
+# apply(data, 2, function(col)sum(is.na(col))/length(col))
+# md.pattern(data, plot= T)
+# md.pairs(data)
+# 
+# # Multiple Imputation (only for private customers)
+# private_customers = subset(data[which(data$Client_type==0),])
+# corporate_customers = subset(data[which(data$Client_type==1),])
+# 
+# imp_data = mice(private_customers) 
+# private_customers <- complete(imp_data)
+# 
+# data <- rbind(private_customers,corporate_customers)
 
 
 # Outlier ----------------------------------------------------------------
 
 # Outlier Detection & Elimination
-
 summary(data)
+
+# Set to NA, since we interprete these factors as not meaningful
+data$Age[data$Age >= 105] = NA 
+data$Age[data$Age < 18] = NA
 
 ## Age
 plot(data[, Age])
@@ -277,9 +281,7 @@ plot(data[, Age])
 data[Age >= 105, .N, by = Churn] # 14 Customers are 105 years old or older 
 # Customers younger than 18 years
 data[Age < 18, .N, by = Churn] # 9 Customers are younger than 18 years 
-# Set to NA, since we interprete these factors as not meaningful
-data$Age[data$Age >= 105] = NA 
-data$Age[data$Age < 18] = NA
+
 
 ## Consumption
 plot(data[, Consumption])
@@ -380,7 +382,6 @@ data[, .(Client_type,
   scale_color_tableau() +
   scale_fill_tableau()
 
-
 # Churn Distribution for Continuous Features 
 
 # Density Plots
@@ -402,12 +403,10 @@ data[,.(Age,
   scale_color_tableau() +
   scale_fill_tableau()
 
-
 ## Detailled Exploration of Single Features
 
 #Age
-
-data %>% drop_na() %>%
+p1 = data[Age > 18 & Age <= 105 ] %>% drop_na() %>%
   ggplot(aes(x = Age, fill = Churn, color = Churn)) +
   geom_density(alpha = 0.5) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1),
@@ -416,8 +415,7 @@ data %>% drop_na() %>%
   scale_fill_tableau()
 
 # Consumption
-
-data %>% drop_na() %>%
+p2 = data[Consumption <= 15000] %>% drop_na() %>%
   ggplot(aes(x = Consumption, fill = Churn, color = Churn)) +
   geom_density(alpha = 0.5) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1),
@@ -425,6 +423,16 @@ data %>% drop_na() %>%
   scale_color_tableau() +
   scale_fill_tableau()
 
+# Consumption
+p3 = data %>% drop_na() %>%
+  ggplot(aes(x = Duration_of_customer_relationship, fill = Churn, color = Churn)) +
+  geom_density(alpha = 0.5) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "top") +
+  scale_color_tableau() +
+  scale_fill_tableau()
+
+grid.arrange(p1, p2, p3, ncol = 3)
 
 # Final Dataset for Modeling ----------------------------------------------------------
 
@@ -1142,7 +1150,6 @@ corrplot.mixed(corr=cor(data_2018[, .(Age,
                                  Actual_payment)], use="complete.obs", method="pearson"), 
                                  upper="ellipse", 
                                  tl.pos="lt")
-
 
 # Final Dataset
 data_2018 = data_2018[, .(Churn, 
