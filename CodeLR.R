@@ -9,6 +9,7 @@ install.packages("dplyr")
 install.packages("data.table")
 install.packages("ggplot2")
 install.packages("caret")
+install.packages("pROC")
 install.packages("lubridate")
 install.packages("xgboost")
 install.packages("klaR")
@@ -226,7 +227,23 @@ data$Duration_of_customer_relationship <- NULL
 data$Customer_since <- NULL
 data$Contract_start_date <- NULL
 
-#Datasets for LR 
+# Imputation  --------------------------------------------------------------
+
+# Detect Percentage of NA's per feature
+apply(data, 2, function(col)sum(is.na(col))/length(col))
+md.pattern(data, plot= T)
+md.pairs(data)
+
+# Multiple Imputation (only for private customers)
+private_customers = subset(data[which(data$Client_type==0),])
+corporate_customers = subset(data[which(data$Client_type==1),])
+
+imp_data = mice(private_customers) 
+private_customers <- complete(imp_data)
+
+data <- rbind(private_customers,corporate_customers)
+
+#Datasets for LR -------------
 #Dataset without ContractID, Zip_code, and Age
 data1 = data[, .(Churn, 
                      Client_type, 
@@ -254,7 +271,7 @@ data1 = data[, .(Churn,
 data1 = na.omit(data1) #reduction from 72282 observations to 72173 observations (-109 observations)
 
 
-#Logistic Regression -----------------------------------
+#Classic Logistic Regression -----------------------------------
 
 #Influence of single IVs on DV -------------------------
 
@@ -465,20 +482,260 @@ summary(m_2)
 anova(m_2, test="Chisq")
 vif(m_2)
 
+#Model backward selection
 
-#Rare events logistic regression (ReLogit)
+m_2_bw <- stepAIC(m_2, direction="backward", trace = T)
+summary(m_2_bw)
+vif(m_2_bw)
+g_2_bth$anova
+
+
+#Model forward selection 
+
+m_3 <- glm(Churn ~ 1, data = train_data, family = binomial) #Null model
+summary(m_3)
+m_3_fw <- stepAIC(m_3, direction="forward", trace = T, scope=list(upper=m_2,lower=m_3))
+vif(m_3_fw)
+
+#Model forward and backward selection
+
+m_3_both <- stepAIC(m_3, direction="both", trace = T, scope=list(upper=m_2,lower=m_3))
+vif(m_3_both)
+
+#Rare events logistic regression (ReLogit) -------------
 
 install.packages("Zelig")
 require(Zelig)
 
-m_re <- zelig(Churn ~., tau = NULL, model = "relogit", bias.correct = TRUE, data = train_data)
+#Influence of single IVs on DV -------------------------
 
-#Model backward and forward selection
+test_data$Churn = as.integer(test_data$Churn) #Required to run relogit model
+test_data$Churn = test_data$Churn-1
 
-m_2_bth <- stepAIC(m_2, direction="backward", trace = FALSE)
-summary(m_2_bth)
-g_2_bth$anova
+train_data$Churn = as.integer(train_data$Churn) #Required to run relogit model
+train_data$Churn = train_data$Churn-1
+
+zelig(Churn ~  Client_type, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
+
+zelig(Churn ~ Bill_shock, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
+
+zelig(Churn ~  Online_account, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
+
+zelig(Churn ~  Opt_In_Mail, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
+
+zelig(Churn ~  Opt_In_Post, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
+
+zelig(Churn ~  Opt_In_Tel, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
+
+zelig(Churn ~  Recovered, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
+
+zelig(Churn ~  Consumption, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
+
+zelig(Churn ~  Actual_payment, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
+
+zelig(Churn ~  Continuous_relationship, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
+
+zelig(Churn ~  Payment_on_account, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
+
+zelig(Churn ~  Annual_account, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
+
+zelig(Churn ~  International, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
+
+zelig(Churn ~  Market_area, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
+
+zelig(Churn ~  DBII, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
+
+zelig(Churn ~  Minimum_contract_term, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
+
+zelig(Churn ~  Customer_since_interval, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
+
+zelig(Churn ~  Contract_start_date_interval, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
 
 
+#Build models with multiple variables in the model based on selection methods from classic logistic regression------
+
+m_2_re <- zelig(Churn ~  Client_type + Bill_shock + Online_account + Opt_In_Mail + Opt_In_Post + Opt_In_Tel + Recovered + Continuous_relationship + Notice_period + Payment_on_account + Annual_account + International + Market_area + DBII + Automatic_contract_extension + Minimum_contract_term + Customer_since_interval + Contract_start_date_interval, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
+
+test_data$Prob_m_2_re = predict(m_2_re, test_data, type="response") 
+
+m_2_bw_re <- zelig(Churn ~ Bill_shock + Opt_In_Post + Recovered + Annual_account + 
+                     Market_area + DBII + Minimum_contract_term + Customer_since_interval + 
+                     Contract_start_date_interval, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
+
+test_data$Prob_m_2_bw_re = predict(m_2_bw_re, test_data, type="response")
+
+m_3_bw_re <- zelig(Churn ~ Bill_shock + Opt_In_Post + Recovered + Consumption + 
+                     Payment_on_account + Annual_account + Market_area + Minimum_contract_term + 
+                     Customer_since_interval + Contract_start_date_interval, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
+
+summary(m_3_bw_re)
+
+test_data$Prob_m_3_bw_re = predict(m_3_bw_re, test_data, type="response")
+
+m_3_fw_re <- zelig(Churn ~ Customer_since_interval + Market_area + Contract_start_date_interval + 
+                     DBII + Actual_payment + Consumption + Opt_In_Post + Recovered, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
+
+test_data$Prob_m_3_fw_re = predict(m_3_fw_re, test_data, type="response")
+
+m_3_bth_re <- zelig(Churn ~ Customer_since_interval + Market_area + Contract_start_date_interval + 
+                      Actual_payment + Consumption + Opt_In_Post + Recovered, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
+
+test_data$Prob_m_3_bth_re = predict(m_3_bth_re, test_data, type="response")
+
+#Evaluate model performances ---------------------
+
+library(ggplot2)
+require(caret)
+library(pROC)
+library(gplots)
+
+test_data$Churn <- as.factor(test_data$Churn)
+str(test_data)
+
+#m_2_re -----------------
+
+test_data$Pred_m_2_re <- ifelse(test_data$Prob_m_2_re > 0.05,"0", "1")
+test_data$Pred_m_2_re <- as.factor(test_data$Pred_m_2_re)
+confusionMatrix(data = test_data$Pred_m_2_re, reference= test_data$Churn, positive = "1")
+
+#Area under curve
+auc(test_data$Churn, test_data$Prob_m_2_re)
+
+#ROC
+ROCPred_m_2_re <- prediction(test_data$Prob_m_2_re,test_data$Churn)
+ROCPerf_m_2_re <- performance(ROCPred_m_2_re, measure="tpr", x.measure="fpr")
+plot(ROCPerf_m_2_re, colorize=T, print.cutoffs.at = seq(0.1, by = 0.1))
+abline(a=0, b= 1)
+
+#Calculate best threshold
+roc_m_2_re <- roc(response = test_data$Churn, predictor = test_data$Prob_m_2_re)
+coords(roc_m_2_re, x = "best", best.method = "y", input = "threshold")
+coords(roc_m_2_re, x = "best", best.method = "c", input = "threshold")
+
+# Determine Threshold which minimizes Misspecification Costs
+coords(roc, x= "best", best.weights = c(3,0.3), input = "threshold")
+
+#m_2_bw_re -----------------
+
+test_data$Pred_m_2_bw_re <- ifelse(test_data$Prob_m_2_bw_re > 0.05,"0", "1")
+test_data$Pred_m_2_bw_re <- as.factor(test_data$Pred_m_2_bw_re)
+confusionMatrix(data = test_data$Pred_m_2_bw_re, reference= test_data$Churn, positive = "1")
+
+#Area under curve
+auc(test_data$Churn, test_data$Prob_m_2_bw_re)
+
+#m_3_bw_re ------------------
+
+test_data$Pred_m_3_bw_re <- ifelse(test_data$Prob_m_3_bw_re < 0.004,"0", "1")
+test_data$Pred_m_3_bw_re <- as.factor(test_data$Pred_m_3_bw_re)
+confusionMatrix(data = test_data$Pred_m_3_bw_re, reference= test_data$Churn, positive = "1")
+
+#Area under curve = 0.6987 (best AUC)
+auc(test_data$Churn, test_data$Prob_m_3_bw_re)
+
+#Calculate optimal threshold
+roc_m_3_bw_re <- roc(response = test_data$Churn, predictor = test_data$Prob_m_3_bw_re)
+coords(roc_m_3_bw_re, x= "best", best.method = "y", input = "threshold", ret=c("threshold", "specificity", "sensitivity"))
+coords(roc_m_3_bw_re, x = "best", best.method = "c", input = "threshold")
+
+#m_3_fw_re ------------------
+
+test_data$Pred_m_3_fw_re <- ifelse(test_data$Prob_m_3_fw_re > 0.05,"0", "1")
+test_data$Pred_m_3_fw_re <- as.factor(test_data$Pred_m_3_fw_re)
+confusionMatrix(data = test_data$Pred_m_3_fw_re, reference= test_data$Churn, positive = "1")
+
+#Area under curve
+auc(test_data$Churn, test_data$Prob_m_3_fw_re)
+
+#m_3_bth_re ------------------
+
+test_data$Pred_m_3_bth_re <- ifelse(test_data$Prob_m_3_bth_re > 0.05,"0", "1")
+test_data$Pred_m_3_bth_re <- as.factor(test_data$Pred_m_3_bth_re)
+confusionMatrix(data = test_data$Pred_m_3_bth_re, reference= test_data$Churn, positive = "1")
+
+#Area under curve
+auc(test_data$Churn, test_data$Prob_m_3_bth_re)
+
+#Logistic regression for private customers only -------------
+
+#Delete Zip_code, Contract_ID and CLient_type from training and test dataset
+
+private_customers$Zip_code <- NULL
+private_customers$Contract_ID <- NULL
+private_customers$Client_type <- NULL
+
+# Data split (70/30 split)
+set.seed(123)
+split1 <- createDataPartition(private_customers$Churn, p=.7, list=FALSE)
+train_data_private <- private_customers[split1,]
+test_data_private  <- private_customers[-split1,]
+
+summary(train_data_private) #194 churners and 49637 non-churners
+summary(test_data_private) #82 churners and 21272 non-churners
 
 
+#Full model
+private_full <- glm(Churn ~., data = train_data_private, family = binomial)
+summary(private_full)
+vif(private_full) #Issue with multicollinearity
+
+#Backward selection
+private_full_bw <- stepAIC(private_full, direction="backward", trace = T)
+summary(private_full_bw)
+
+vif(private_full_bw)
+
+#Forward selection
+private_null <- glm(Churn ~ 1, data = train_data_private, family = binomial) #Null model
+
+#Forward and backward selection
+private_null_fw <- stepAIC(private_null, direction="forward", trace = T, scope=list(upper=private_full,lower=private_null))
+
+vif(private_null_fw)
+
+#Model forward and backward selection
+private_null_bth <- stepAIC(private_null, direction="both", trace = T, scope=list(upper=private_full,lower=private_null))
+vif(private_null_bth)
+
+#Build models with multiple variables in the model based on selection methods from classic logistic regression------
+
+test_data_private$Churn = as.integer(test_data_private$Churn) #Required to run relogit model
+test_data_private$Churn = test_data_private$Churn-1
+
+train_data_private$Churn = as.integer(train_data_private$Churn) #Required to run relogit model
+train_data_private$Churn = train_data_private$Churn-1
+
+private_full_bw_re <- zelig(Churn ~ Age + Minimum_contract_term + Consumption + Annual_account + 
+                           Bill_shock + Market_area + Customer_since_interval + Contract_start_date_interval
+                         , tau = 194/49831, model = "relogit",  case.control = "prior", bias.correct = TRUE, data = train_data_private)
+
+summary(private_full_bw_re)
+
+private_null_fw_re <- zelig(Churn ~ Customer_since_interval + Contract_start_date_interval + 
+                              Market_area + Consumption + Age + Annual_account + Bill_shock + 
+                              Minimum_contract_term
+                            , tau = 194/49831, model = "relogit",  case.control = "prior", bias.correct = TRUE, data = train_data_private)
+
+summary(private_null_fw_re)
+
+#Model evaluation ---------------
+
+#Private_full_bw_re
+test_data_private$Churn <- as.factor(test_data_private$Churn)
+
+test_data_private$Prob_private_full_bw_re = predict(private_full_bw_re, test_data_private, type="response")
+test_data_private$Pred_private_full_bw_re <- ifelse(test_data_private$Prob_private_full_bw_re < 0.05,"0", "1")
+test_data_private$Pred_private_full_bw_re <- as.factor(test_data_private$Pred_private_full_bw_re)
+confusionMatrix(data = test_data_private$Pred_private_full_bw_re, reference= test_data_private$Churn, positive = "1")
+
+  #Area under curve
+auc(test_data_private$Churn, test_data_private$Prob_private_full_bw_re)
+
+#Private_null_fw_re
+test_data_private$Prob_private_null_fw_re = predict(private_null_fw_re, test_data_private, type="response")
+test_data_private$Pred_private_null_fw_re <- ifelse(test_data_private$Prob_private_null_fw_re < 0.05,"0", "1")
+test_data_private$Pred_private_null_fw_re <- as.factor(test_data_private$Pred_private_null_fw_re)
+confusionMatrix(data = test_data_private$Pred_private_null_fw_re, reference= test_data_private$Churn, positive = "1")
+
+  #Area under curve
+auc(test_data_private$Churn, test_data_private$Prob_private_null_fw_re)
