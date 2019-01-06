@@ -1010,12 +1010,19 @@ cs_result = cbind(churners[churners$Client_type==0,], "Cluster" = hdb$cluster)
 
 # Import 2018 Data ----------------------------------------------------------------
 
-data_2018 = read_excel("Data\\Data November 2018.xlsx", na = "-", col_types = c("text","guess","guess","text","guess","guess","guess","guess","guess","guess","guess","numeric","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess"))
-write.csv2(data_2018, "Data\\Data_November_2018.csv")
+#data_2018 = read_excel("Data\\Data November 2018.xlsx", na = "-", col_types = c("text","guess","guess","text","guess","guess","guess","guess","guess","guess","guess","numeric","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess"))
+#write.csv2(data_2018, "Data\\Data_November_2018.csv")
 
+data_2018 = read_excel("Data/Data November 2018.xlsx", na = "-", col_types = c("text","guess","guess","text","guess","guess","guess","guess","guess","guess","guess","numeric","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess"))
+write.csv2(data_2018, "Data/Data_November_2018.csv")
+
+#Mac
+data_2018 = fread("Data/Data_November_2018.csv", na.strings = "NA", dec = ",")
+
+#Windows
 data_2018 = fread("Data\\Data_November_2018.csv", na.strings = "NA", dec = ",")
 
-# Data Preparation
+# Data Preparation -----------------
 #remove title and V1 from the data set
 data_2018 = data_2018[,c("Contract_ID", 
                "Client type", 
@@ -1058,19 +1065,22 @@ names(data_2018)[names(data_2018) == 'Opt In Post'] <- 'Opt_In_Post'
 names(data_2018)[names(data_2018) == 'Opt In Tel'] <- 'Opt_In_Tel'
 names(data_2018)[names(data_2018) == 'Market area'] <- 'Market_area'
 
+# Online Account - NA to 0 
+data_2018$Online_account[is.na(data_2018$Online_account)] = 0
+
+# Recovered - "" to 0 and "X" to 1
+data_2018$Recovered[data_2018$Recovered=="X"] = 1
+data_2018$Recovered[is.na(data_2018$Recovered)] = 0
+
 #If "Contract_start_date"==NA, insert "Customer_since" as "Contract_start_date"
-data_2018$`Customer_since` = ymd(data_2018$`Customer_since`) 
-data_2018$`Contract_start_date` = ymd(data_2018$`Contract_start_date`)
+data_2018$`Customer_since` = ymd(data_2018$Customer_since) 
+data_2018$`Contract_start_date` = ymd(data_2018$Contract_start_date)
 data_2018$Contract_start_date <- if_else(is.na(data_2018$Contract_start_date), data_2018$Customer_since, data_2018$Contract_start_date)
 
 #If "Customer_since"==NA, calculate "Customer_since" based on "Duration_of_customer_relationship"
 data_2018$Customer_since <- if_else(is.na(data_2018$Customer_since),ymd(20181201)- months(data_2018$Duration_of_customer_relationship),data_2018$Customer_since)
 
-#At 4 observations, the contract starts later than 2017-01-01 --> Delete cases
-nrow(subset(data_2018, data_2018$Customer_since <= ymd(20181101)))
-data_2018 <- subset(data_2018, data_2018$Customer_since <= ymd(20181201))
-
-#At 51 observations "Customer_since" starts later than "Contract start date" --> Replace "Customer_since" by "Contract_start_date"  
+#At 59 observations "Customer_since" starts later than "Contract start date" --> Replace "Customer_since" by "Contract_start_date"  
 nrow(subset(data_2018,data_2018$Customer_since>data_2018$Contract_start_date)) 
 data_2018$Customer_since <- if_else(data_2018$Customer_since>data_2018$Contract_start_date, data_2018$Contract_start_date, data_2018$Customer_since)
 
@@ -1080,13 +1090,22 @@ data_2018$`Customer_since_interval` = interval(ymd(data_2018$`Customer_since`), 
 #Transform "Contract_start_date" to number of months
 data_2018$`Contract_start_date_interval` = interval(ymd(data_2018$`Contract_start_date`), ymd(20181201)) %/% months(1)
 
+#Remove customer_since, contract_start_date, and duration_of_customer_relationship
+data_2018$Customer_since <- NULL
+data_2018$Contract_start_date <- NULL
+data_2018$Duration_of_customer_relationship <- NULL
+
+#Transform "Market area" to binary variables
+data_2018$MA_Grundversorger = unlist(lapply(data_2018$Market_area, FUN = function(x) ifelse(x=="Grundversorger",1,0)))
+data_2018$MA_Erweitert = unlist(lapply(data_2018$Market_area, FUN = function(x) ifelse(x=="Erweitertes Netzgebiet",1,0)))
+data_2018$MA_Restlich = unlist(lapply(data_2018$Market_area, FUN = function(x) ifelse(x=="Restliches Bundesgebiet",1,0)))
+
 ## Feature Conversion
 #Convert features into right data types
 data_2018$Contract_ID = as.character(data_2018$Contract_ID)
 data_2018$`Zip_code` = as.character(data_2018$`Zip_code`)
 data_2018$`Client_type` = as.factor(data_2018$`Client_type`)
 data_2018$Age = as.numeric(data_2018$Age)
-data_2018$Duration_of_customer_relationship = as.numeric(data_2018$Duration_of_customer_relationship)
 data_2018$Minimum_contract_term = as.numeric(data_2018$Minimum_contract_term)
 data_2018$Notice_period = as.numeric(data_2018$Notice_period)
 data_2018$Automatic_contract_extension = as.numeric(data_2018$Automatic_contract_extension)
@@ -1103,10 +1122,6 @@ data_2018$`MA_Grundversorger` = as.factor(data_2018$`MA_Grundversorger`)
 data_2018$`MA_Erweitert` = as.factor(data_2018$`MA_Erweitert`)
 data_2018$`MA_Restlich` = as.factor(data_2018$`MA_Restlich`)
 data_2018$Recovered = as.factor(data_2018$Recovered)
-data_2018$Churn = as.character(data_2018$Churn)
-data_2018$Churn[data_2018$Churn == "0"] = "No"
-data_2018$Churn[data_2018$Churn == "1"] = "Yes"
-data_2018$Churn = as.factor(data_2018$Churn)
 data_2018$DBII = as.numeric(data_2018$DBII)
 data_2018$Customer_since_interval = as.numeric(data_2018$Customer_since_interval)
 data_2018$Contract_start_date_interval = as.numeric(data_2018$Contract_start_date_interval)
