@@ -1037,8 +1037,7 @@ data_2018 = data_2018[,c("Contract_ID",
                "Opt In Tel", 
                "Market area", 
                "Recovered", 
-               "DBII", 
-               "Churn")]
+               "DBII")]
 
 #rename cols in order to avoid problems with imputation
 
