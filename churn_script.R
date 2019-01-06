@@ -164,11 +164,9 @@ data$Online_account[is.na(data$Online_account)] = 0
 data$Recovered[data$`Recovered`=="X"] = 1
 data$Recovered[is.na(data$`Recovered`)] = 0
 
-#At 51 observations "Customer_since" starts later than "Contract start date" --> Replace "Customer_since" by "Contract_start_date"  
-nrow(subset(data,data$Customer_since>data$Contract_start_date)) 
-data$Customer_since <- if_else(data$Customer_since>data$Contract_start_date, data$Contract_start_date, data$Customer_since)
-
 #If "Contract_start_date"==NA, insert "Customer_since" as "Contract_start_date"
+data$`Customer_since` = ymd(data$`Customer_since`) 
+data$`Contract_start_date` = ymd(data$`Contract_start_date`)
 data$Contract_start_date <- if_else(is.na(data$Contract_start_date), data$Customer_since, data$Contract_start_date)
 
 #If "Customer_since"==NA, calculate "Customer_since" based on "Duration_of_customer_relationship"
@@ -178,12 +176,14 @@ data$Customer_since <- if_else(is.na(data$Customer_since),ymd(20170301)- months(
 nrow(subset(data, data$Customer_since <= ymd(20170101)))
 data <- subset(data, data$Customer_since <= ymd(20170101))
 
+#At 51 observations "Customer_since" starts later than "Contract start date" --> Replace "Customer_since" by "Contract_start_date"  
+nrow(subset(data,data$Customer_since>data$Contract_start_date)) 
+data$Customer_since <- if_else(data$Customer_since>data$Contract_start_date, data$Contract_start_date, data$Customer_since)
+
 #Transform "Customer_since" to number of months
-data$`Customer_since` = ymd(data$`Customer_since`) 
 data$`Customer_since_interval` = interval(ymd(data$`Customer_since`), ymd(20170201)) %/% months(1)
 
 #Transform "Contract_start_date" to number of months
-data$`Contract_start_date` = ymd(data$`Contract_start_date`)
 data$`Contract_start_date_interval` = interval(ymd(data$`Contract_start_date`), ymd(20170201)) %/% months(1)
 
 #Transform "Market area" to binary variables
@@ -441,7 +441,6 @@ data = data[, .(Churn,
                 Recovered, 
                 Continuous_relationship, 
                 Age, 
-                Duration_of_customer_relationship, 
                 Consumption, 
                 Notice_period, 
                 Annual_account, 
@@ -537,40 +536,34 @@ max(glm_model_results$crm_eval)
 
 # Data Preprocessing for SVM: scale data to [-1, 1]
 # Training Data
-scale_train_data = as.data.table(ReScaling(train_data[, 13:21], t.mn = -1, t.mx = 1)) # Scale continuous feature
+scale_train_data = as.data.table(ReScaling(train_data[, 13:21], t.mn = 0, t.mx = 1)) # Scale continuous feature
 scale_train_data = cbind(train_data[, 1:12], scale_train_data)
 
 # Test Data
-scale_test_data = as.data.table(ReScaling(test_data[, 13:21], t.mn = -1, t.mx = 1)) # Scale continuous feature
+scale_test_data = as.data.table(ReScaling(test_data[, 13:21], t.mn = 0, t.mx = 1)) # Scale continuous feature
 scale_test_data = cbind(test_data[, 1:12], scale_test_data)
 
 set.seed(743) 
-svm_grid <- expand.grid(sigma = c(0.05, 0.0456, 0.0577), C = c(1.5,1.596,1.65,1.89,1.95,2,2.2,2.44))
-
-require(e1071)
-svm_model = svm(x= as.matrix(scale_train_data[, -1]),
-                y= as.factor(scale_train_data$Churn),
-                scale = F,
-                kernel = "radial")
+svm_grid_radial <- expand.grid(sigma = c(0.05, 0.0456, 0.0577), C = c(1.5,1.596,1.65,1.89,1.95,2,2.2,2.44))
 
 svm_tc <- trainControl(method = "cv", number = 5,
-                      summaryFunction = twoClassSummary,
-                      classProbs = TRUE,
-                      allowParallel=TRUE,
-                      sampling = "down") # Use Subsampling due to class imbalance
+                       summaryFunction = twoClassSummary,
+                       classProbs = TRUE) 
 
-# svm_model = train(x= scale_train_data[, -1],
-#                  y= scale_train_data$Churn,
-#                  method="svmRadial",
-#                  trControl=svm_tc,
-#                  tuneGrid=svm_grid,
-#                  metric="ROC") # ROC, Kappa does not work
+svm_Radial_Grid <- train(x = scale_train_data[,-1], 
+                         y = scale_train_data$Churn, 
+                         method = "svmRadial",
+                         trControl=svm_tc,
+                         tuneGrid = svm_grid_radial)
+
+#Use the predictions on the data
+svm_pred <- predict(model_svm, newdata = scale_test_data[, -1], type ="raw")
 
 print(svm_model)
 plot(svm_model)
 
 # Predicting the Test set results
-svm_pred = predict(svm_model, newdata = scale_test_data[,-1], type ="raw")
+svm_pred = predict(svm_model, newdata = scale_test_data[,-1])
 
 confusionMatrix(svm_pred, scale_test_data$Churn)
 
@@ -906,7 +899,6 @@ train_hf$Churn = h2o.relevel(train_hf$Churn, "No_Churn")
 valid_hf$Churn = h2o.relevel(valid_hf$Churn, "No_Churn")
 test_hf$Churn = h2o.relevel(test_hf$Churn, "No_Churn")
 
-
 # Modeling
 aml <- h2o.automl(x = features, 
                   y = response,
@@ -945,7 +937,6 @@ max(metrics$crm_eval_final)
 View(metrics) 
 
 metrics$crm_eval_correct = NULL
-
 
 # Metrics Plot
 metrics %>%
@@ -1011,15 +1002,195 @@ cs_result = cbind(churners[churners$Client_type==0,], "Cluster" = hdb$cluster)
 
 # Import 2018 Data ----------------------------------------------------------------
 
-data_2018 = read_excel("Data\\Data November 2018.xlsx", na = "-")
-# write.csv(data_2018, "Data_November_2018.csv")
+data_2018 = read_excel("Data\\Data November 2018.xlsx", na = "-", col_types = c("text","guess","guess","text","guess","guess","guess","guess","guess","guess","guess","numeric","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess"))
+write.csv2(data_2018, "Data\\Data_November_2018.csv")
 
-data_2018 = fread("Data\\Data_November_2018.csv", na.strings = "-")
+data_2018 = fread("Data\\Data_November_2018.csv", na.strings = "NA", dec = ",")
+
+# Data Preparation
+#remove title and V1 from the data set
+data_2018 = data_2018[,c("Contract_ID", 
+               "Client type", 
+               "Zip code", 
+               "Age", 
+               "Duration of customer relationship", 
+               "Customer since",
+               "Contract start date", 
+               "Minimum contract term", 
+               "Notice period",
+               "Automatic contract extension",
+               "Consumption", 
+               "Payment on account", 
+               "Annual account", 
+               "Bill shock", 
+               "Online account", 
+               "Opt In Mail", 
+               "Opt In Post", 
+               "Opt In Tel", 
+               "Market area", 
+               "Recovered", 
+               "DBII", 
+               "Churn")]
+
+#rename cols in order to avoid problems with imputation
+
+names(data_2018)[names(data_2018) == 'Client type'] <- 'Client_type' # Customer since, Notice Period, Automatic Contract extension
+names(data_2018)[names(data_2018) == 'Zip code'] <- 'Zip_code'
+names(data_2018)[names(data_2018) == 'Duration of customer relationship'] <- 'Duration_of_customer_relationship'  
+names(data_2018)[names(data_2018) == 'Customer since' ] <- 'Customer_since' 
+names(data_2018)[names(data_2018) == 'Contract start date' ] <- 'Contract_start_date' 
+names(data_2018)[names(data_2018) == 'Minimum contract term'] <- 'Minimum_contract_term'
+names(data_2018)[names(data_2018) == 'Notice period' ] <- 'Notice_period' 
+names(data_2018)[names(data_2018) == 'Automatic contract extension' ] <- 'Automatic_contract_extension' 
+names(data_2018)[names(data_2018) == 'Payment on account'] <- 'Payment_on_account'
+names(data_2018)[names(data_2018) == 'Annual account'] <- 'Annual_account'
+names(data_2018)[names(data_2018) == 'Bill shock'] <- 'Bill_shock'
+names(data_2018)[names(data_2018) == 'Online account'] <- 'Online_account'
+names(data_2018)[names(data_2018) == 'Opt In Mail'] <- 'Opt_In_Mail'
+names(data_2018)[names(data_2018) == 'Opt In Post'] <- 'Opt_In_Post'
+names(data_2018)[names(data_2018) == 'Opt In Tel'] <- 'Opt_In_Tel'
+names(data_2018)[names(data_2018) == 'Market area'] <- 'Market_area'
+
+#If "Contract_start_date"==NA, insert "Customer_since" as "Contract_start_date"
+data_2018$`Customer_since` = ymd(data_2018$`Customer_since`) 
+data_2018$`Contract_start_date` = ymd(data_2018$`Contract_start_date`)
+data_2018$Contract_start_date <- if_else(is.na(data_2018$Contract_start_date), data_2018$Customer_since, data_2018$Contract_start_date)
+
+#If "Customer_since"==NA, calculate "Customer_since" based on "Duration_of_customer_relationship"
+data_2018$Customer_since <- if_else(is.na(data_2018$Customer_since),ymd(20181201)- months(data_2018$Duration_of_customer_relationship),data_2018$Customer_since)
+
+#At 4 observations, the contract starts later than 2017-01-01 --> Delete cases
+nrow(subset(data_2018, data_2018$Customer_since <= ymd(20181101)))
+data_2018 <- subset(data_2018, data_2018$Customer_since <= ymd(20181201))
+
+#At 51 observations "Customer_since" starts later than "Contract start date" --> Replace "Customer_since" by "Contract_start_date"  
+nrow(subset(data_2018,data_2018$Customer_since>data_2018$Contract_start_date)) 
+data_2018$Customer_since <- if_else(data_2018$Customer_since>data_2018$Contract_start_date, data_2018$Contract_start_date, data_2018$Customer_since)
+
+#Transform "Customer_since" to number of months
+data_2018$`Customer_since_interval` = interval(ymd(data_2018$`Customer_since`), ymd(20170201)) %/% months(1)
+
+#Transform "Contract_start_date" to number of months
+data_2018$`Contract_start_date_interval` = interval(ymd(data_2018$`Contract_start_date`), ymd(20170201)) %/% months(1)
+
+## Feature Conversion
+#Convert features into right data types
+data_2018$Contract_ID = as.character(data_2018$Contract_ID)
+data_2018$`Zip_code` = as.character(data_2018$`Zip_code`)
+data_2018$`Client_type` = as.factor(data_2018$`Client_type`)
+data_2018$Age = as.numeric(data_2018$Age)
+data_2018$Duration_of_customer_relationship = as.numeric(data_2018$Duration_of_customer_relationship)
+data_2018$Minimum_contract_term = as.numeric(data_2018$Minimum_contract_term)
+data_2018$Notice_period = as.numeric(data_2018$Notice_period)
+data_2018$Automatic_contract_extension = as.numeric(data_2018$Automatic_contract_extension)
+data_2018$Consumption = as.numeric(data_2018$Consumption) 
+data_2018$Payment_on_account = as.numeric(data_2018$Payment_on_account)
+data_2018$`Annual_account` = as.numeric(data_2018$`Annual_account`)
+data_2018$`Bill_shock` = as.factor(data_2018$`Bill_shock`)
+data_2018$`Online_account` = as.factor(data_2018$`Online_account`)
+data_2018$`Opt_In_Mail` = as.factor(data_2018$`Opt_In_Mail`)
+data_2018$`Opt_In_Post` = as.factor(data_2018$`Opt_In_Post`)
+data_2018$`Opt_In_Tel` = as.factor(data_2018$`Opt_In_Tel`)
+data_2018$Market_area = as.factor(data_2018$Market_area)
+data_2018$`MA_Grundversorger` = as.factor(data_2018$`MA_Grundversorger`)
+data_2018$`MA_Erweitert` = as.factor(data_2018$`MA_Erweitert`)
+data_2018$`MA_Restlich` = as.factor(data_2018$`MA_Restlich`)
+data_2018$Recovered = as.factor(data_2018$Recovered)
+data_2018$Churn = as.character(data_2018$Churn)
+data_2018$Churn[data_2018$Churn == "0"] = "No"
+data_2018$Churn[data_2018$Churn == "1"] = "Yes"
+data_2018$Churn = as.factor(data_2018$Churn)
+data_2018$DBII = as.numeric(data_2018$DBII)
+data_2018$Customer_since_interval = as.numeric(data_2018$Customer_since_interval)
+data_2018$Contract_start_date_interval = as.numeric(data_2018$Contract_start_date_interval)
+
+# Feature Engineering 
+#Create feature "international"
+data_2018$`International` = unlist(gregexpr("[0-9]{5}", data_2018$`Zip_code`)) # Nochmal überprüfen, kurze PLZ müssen nicht unbedingt im Ausland sein
+data_2018$`International`[data_2018$`International` == 1] = 0
+data_2018$`International`[data_2018$`International` == -1] = 1
+
+data_2018[ International == 1, .N, by = MA_Erweitert] # Auch checken, ob erweiterten Netzgebiet
+data_2018[ International == 1, .N, by = MA_Restlich] 
+
+#Create feature "annual payment"
+data_2018$`Actual_payment` = data_2018$Payment_on_account * 12 + data_2018$Annual_account
+
+#Create feature "Continuous relationship"
+data_2018$`Continuous_relationship` = ifelse(data_2018$Contract_start_date==data_2018$Customer_since, 1,0)
+data_2018$Continuous_relationship = as.factor(data_2018$Continuous_relationship)
+
+# Outlier Detection
+data_2018$Age[data_2018$Age >= 105] = NA 
+data_2018$Age[data_2018$Age < 18] = NA
+
+# Data Exploration
+summary(data_2018)
+str(data_2018)
+
+# Correlation Plot
+corrplot.mixed(corr=cor(data_2018[, .(Age, 
+                                 Duration_of_customer_relationship, 
+                                 Notice_period,
+                                 Consumption, 
+                                 Payment_on_account,
+                                 Annual_account, 
+                                 DBII, 
+                                 Minimum_contract_term, 
+                                 Customer_since_interval,
+                                 Contract_start_date_interval, 
+                                 Actual_payment)], use="complete.obs", method="pearson"), 
+                                 upper="ellipse", 
+                                 tl.pos="lt")
+
+
+# Final Dataset
+data_2018 = data_2018[, .(Churn, 
+                      Client_type, 
+                      Bill_shock, 
+                      Online_account, 
+                      Opt_In_Mail, 
+                      Opt_In_Post, 
+                      Opt_In_Tel, 
+                      MA_Grundversorger,
+                      MA_Erweitert,
+                      MA_Restlich,
+                      Recovered, 
+                      Continuous_relationship, 
+                      Age, 
+                      Consumption, 
+                      Notice_period, 
+                      Annual_account, 
+                      DBII, 
+                      Minimum_contract_term, 
+                      Customer_since_interval,
+                      Contract_start_date_interval)]
+
+# Convert features of the preparaed data into right format for modeling 
+data_2018$Churn = as.factor(data_2018$Churn)
+data_2018$Client_type = as.numeric(as.character(data_2018$Client_type))
+data_2018$Bill_shock = as.numeric(as.character(data_2018$Bill_shock))
+data_2018$Online_account = as.numeric(as.character(data_2018$Online_account))
+data_2018$Opt_In_Mail = as.numeric(as.character(data_2018$Opt_In_Mail))
+data_2018$Opt_In_Post = as.numeric(as.character(data_2018$Opt_In_Post))
+data_2018$Opt_In_Tel = as.numeric(as.character(data_2018$Opt_In_Tel))
+data_2018$MA_Grundversorger = as.numeric(as.character(data_2018$MA_Grundversorger))
+data_2018$MA_Erweitert = as.numeric(as.character(data_2018$MA_Erweitert))
+data_2018$MA_Restlich = as.numeric(as.character(data_2018$MA_Restlich))
+data_2018$Recovered = as.numeric(as.character(data_2018$Recovered))
+data_2018$Continuous_relationship = as.numeric(as.character(data_2018$Continuous_relationship))
+data_2018$Age = as.numeric(as.character(data_2018$Age))
+data_2018$Duration_of_customer_relationship = as.numeric(as.character(data_2018$Duration_of_customer_relationship))
+
+str(data_2018)
+
+# Change order of factor levels such that "Yes" is interpreted as positive and "No" is interpreted as negative 
+levels(data_2018$Churn)
+data_2018$Churn = factor(data_2018$Churn, levels = c("Yes", "No"))
+levels(data_2018$Churn)
 
 
 # Deprecated --------------------------------------------------------------
-
-
 
 # Multiple Imputation 
 imp_data = mice(data[data$Client_type == 0], method = "cart") # Imputation only for private customers
@@ -1032,15 +1203,12 @@ imputed_data = base::rbind(data_impute, imp_data)
 
 
 # a) Naive Bayes 
-
 myControl = trainControl(method = "cv",
                          number = 5,
                          classProbs = TRUE)
 
 model = train(Churn ~ ., data = data, method = "naive_bayes", trControl = myControl, na.action = na.pass)
-
 plot(model)
-
 
 # 1) Naive Bayes 
 
