@@ -1068,10 +1068,10 @@ nrow(subset(data_2018,data_2018$Customer_since>data_2018$Contract_start_date))
 data_2018$Customer_since <- if_else(data_2018$Customer_since>data_2018$Contract_start_date, data_2018$Contract_start_date, data_2018$Customer_since)
 
 #Transform "Customer_since" to number of months
-data_2018$`Customer_since_interval` = interval(ymd(data_2018$`Customer_since`), ymd(20170201)) %/% months(1)
+data_2018$`Customer_since_interval` = interval(ymd(data_2018$`Customer_since`), ymd(20181201)) %/% months(1)
 
 #Transform "Contract_start_date" to number of months
-data_2018$`Contract_start_date_interval` = interval(ymd(data_2018$`Contract_start_date`), ymd(20170201)) %/% months(1)
+data_2018$`Contract_start_date_interval` = interval(ymd(data_2018$`Contract_start_date`), ymd(20181201)) %/% months(1)
 
 ## Feature Conversion
 #Convert features into right data types
