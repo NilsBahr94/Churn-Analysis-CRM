@@ -111,7 +111,6 @@ library(h2o)
 # Imputed
 original_data = fread("Data/Data_January_2017_3_imputed.csv", na.strings = "NA", dec = ",")
 
-<<<<<<< HEAD
 
 # L
 data = fread("Data/Data_January_2017_3_imputed.csv", na.strings = "NA", dec = ",")
@@ -119,10 +118,8 @@ data = fread("Data/Data_January_2017_3_imputed.csv", na.strings = "NA", dec = ",
 # Mac
 data = fread("Data/Data_January_2017_3.csv", na.strings = "NA", dec = ",")
 
-=======
 # Mac
 original_data = fread("Data/Data_January_2017_3.csv", na.strings = "NA", dec = ",")
->>>>>>> 19bfcee8939638cd6ae0500871c02b3e12bfffde
 
 # Windows
 original_data = fread("Data\\Data_January_2017_3.csv", na.strings = "NA", dec = ",")
@@ -478,6 +475,15 @@ data = data[, .(Churn,
                 Minimum_contract_term, 
                 Customer_since_interval,
                 Contract_start_date_interval)]
+
+#Read csv files
+
+
+
+#Join longtitude, lattitude, and population
+
+
+left_join(x, y, by = NULL)
 
 
 # Convert features of the preparaed data into right format for modeling 
