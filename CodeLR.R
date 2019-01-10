@@ -596,6 +596,7 @@ m_3_bw_re <- zelig(Churn ~ Bill_shock + Opt_In_Post + Recovered + Consumption +
                      Customer_since_interval + Contract_start_date_interval, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
 
 summary(m_3_bw_re)
+exp(coef(m_3_bw_re))
 
 test_data$Prob_m_3_bw_re = predict(m_3_bw_re, test_data, type="response")
 
@@ -757,3 +758,135 @@ confusionMatrix(data = test_data_private$Pred_private_full_bw_re, reference= tes
 
   #Area under curve = 0.7427
 auc(test_data_private$Churn, test_data_private$Prob_private_full_bw_re)
+
+#Import 2018 data ---------------
+
+data_2018 = read_excel("Data/Data November 2018.xlsx", na = "-", col_types = c("text","guess","guess","text","guess","guess","guess","guess","guess","guess","guess","numeric","guess","guess","guess","guess","guess","guess","guess","guess","text","guess"))
+write.csv2(data_2018, "Data/Data_November_2018.csv")
+
+#Mac
+data_2018 = fread("Data/Data_November_2018.csv", na.strings = "NA", dec = ",")
+
+# Data Preparation 
+#remove title and V1 from the data set
+data_2018 = data_2018[,c("Contract_ID", 
+                         "Client type", 
+                         "Zip code", 
+                         "Age", 
+                         "Duration of customer relationship", 
+                         "Customer since",
+                         "Contract start date", 
+                         "Minimum contract term", 
+                         "Notice period",
+                         "Automatic contract extension",
+                         "Consumption", 
+                         "Payment on account", 
+                         "Annual account", 
+                         "Bill shock", 
+                         "Online account", 
+                         "Opt In Mail", 
+                         "Opt In Post", 
+                         "Opt In Tel", 
+                         "Market area", 
+                         "Recovered", 
+                         "DBII")]
+
+#rename cols in order to avoid problems with imputation
+
+names(data_2018)[names(data_2018) == 'Client type'] <- 'Client_type' # Customer since, Notice Period, Automatic Contract extension
+names(data_2018)[names(data_2018) == 'Zip code'] <- 'Zip_code'
+names(data_2018)[names(data_2018) == 'Duration of customer relationship'] <- 'Duration_of_customer_relationship'  
+names(data_2018)[names(data_2018) == 'Customer since' ] <- 'Customer_since' 
+names(data_2018)[names(data_2018) == 'Contract start date' ] <- 'Contract_start_date' 
+names(data_2018)[names(data_2018) == 'Minimum contract term'] <- 'Minimum_contract_term'
+names(data_2018)[names(data_2018) == 'Notice period' ] <- 'Notice_period' 
+names(data_2018)[names(data_2018) == 'Automatic contract extension' ] <- 'Automatic_contract_extension' 
+names(data_2018)[names(data_2018) == 'Payment on account'] <- 'Payment_on_account'
+names(data_2018)[names(data_2018) == 'Annual account'] <- 'Annual_account'
+names(data_2018)[names(data_2018) == 'Bill shock'] <- 'Bill_shock'
+names(data_2018)[names(data_2018) == 'Online account'] <- 'Online_account'
+names(data_2018)[names(data_2018) == 'Opt In Mail'] <- 'Opt_In_Mail'
+names(data_2018)[names(data_2018) == 'Opt In Post'] <- 'Opt_In_Post'
+names(data_2018)[names(data_2018) == 'Opt In Tel'] <- 'Opt_In_Tel'
+names(data_2018)[names(data_2018) == 'Market area'] <- 'Market_area'
+
+# Online Account - NA to 0 
+data_2018$Online_account[is.na(data_2018$Online_account)] = 0
+
+# Recovered - "" to 0 and "X" to 1
+data_2018$Recovered[data_2018$Recovered=="X"] = 1
+data_2018$Recovered[is.na(data_2018$Recovered)] = 0
+
+#If "Contract_start_date"==NA, insert "Customer_since" as "Contract_start_date"
+data_2018$`Customer_since` = ymd(data_2018$Customer_since) 
+data_2018$`Contract_start_date` = ymd(data_2018$Contract_start_date)
+data_2018$Contract_start_date <- if_else(is.na(data_2018$Contract_start_date), data_2018$Customer_since, data_2018$Contract_start_date)
+
+#If "Customer_since"==NA, calculate "Customer_since" based on "Duration_of_customer_relationship"
+data_2018$Customer_since <- if_else(is.na(data_2018$Customer_since),ymd(20181201)- months(data_2018$Duration_of_customer_relationship),data_2018$Customer_since)
+
+#At 59 observations "Customer_since" starts later than "Contract start date" --> Replace "Customer_since" by "Contract_start_date"  
+nrow(subset(data_2018,data_2018$Customer_since>data_2018$Contract_start_date)) 
+data_2018$Customer_since <- if_else(data_2018$Customer_since>data_2018$Contract_start_date, data_2018$Contract_start_date, data_2018$Customer_since)
+
+#Transform "Customer_since" to number of months
+data_2018$`Customer_since_interval` = interval(ymd(data_2018$`Customer_since`), ymd(20181201)) %/% months(1)
+
+#Transform "Contract_start_date" to number of months
+data_2018$`Contract_start_date_interval` = interval(ymd(data_2018$`Contract_start_date`), ymd(20181201)) %/% months(1)
+
+#Remove customer_since, contract_start_date, and duration_of_customer_relationship
+data_2018$Customer_since <- NULL
+data_2018$Contract_start_date <- NULL
+data_2018$Duration_of_customer_relationship <- NULL
+
+## Feature Conversion
+#Convert features into right data types
+data_2018$Contract_ID = as.character(data_2018$Contract_ID)
+data_2018$`Zip_code` = as.character(data_2018$`Zip_code`)
+data_2018$`Client_type` = as.factor(data_2018$`Client_type`)
+data_2018$Age = as.numeric(data_2018$Age)
+data_2018$Minimum_contract_term = as.numeric(data_2018$Minimum_contract_term)
+data_2018$Notice_period = as.numeric(data_2018$Notice_period)
+data_2018$Automatic_contract_extension = as.numeric(data_2018$Automatic_contract_extension)
+data_2018$Consumption = as.numeric(data_2018$Consumption) 
+data_2018$Payment_on_account = as.numeric(data_2018$Payment_on_account)
+data_2018$`Annual_account` = as.numeric(data_2018$`Annual_account`)
+data_2018$`Bill_shock` = as.factor(data_2018$`Bill_shock`)
+data_2018$`Online_account` = as.factor(data_2018$`Online_account`)
+data_2018$`Opt_In_Mail` = as.factor(data_2018$`Opt_In_Mail`)
+data_2018$`Opt_In_Post` = as.factor(data_2018$`Opt_In_Post`)
+data_2018$`Opt_In_Tel` = as.factor(data_2018$`Opt_In_Tel`)
+data_2018$Market_area = as.factor(data_2018$Market_area)
+data_2018$Recovered = as.factor(data_2018$Recovered)
+data_2018$DBII = as.numeric(data_2018$DBII)
+data_2018$Customer_since_interval = as.numeric(data_2018$Customer_since_interval)
+data_2018$Contract_start_date_interval = as.numeric(data_2018$Contract_start_date_interval)
+
+# Feature Engineering 
+#Create feature "annual payment"
+data_2018$`Actual_payment` = data_2018$Payment_on_account * 12 + data_2018$Annual_account
+
+#Create feature "Continuous relationship"
+data_2018$`Continuous_relationship` = ifelse(data_2018$Contract_start_date==data_2018$Customer_since, 1,0)
+data_2018$Continuous_relationship = as.factor(data_2018$Continuous_relationship)
+
+# Outlier Detection
+data_2018$Age[data_2018$Age >= 105] = NA 
+data_2018$Age[data_2018$Age < 18] = NA
+
+# Data Exploration
+summary(data_2018)
+str(data_2018)
+
+#Reset customer_since_interval -22 months
+data_2018$Customer_since_interval = ifelse(data_2018$Customer_since_interval<23,0,data_2018$Customer_since_interval-22)
+data_2018$Contract_start_date_interval = ifelse(data_2018$Contract_start_date_interval<23,0,data_2018$Contract_start_date_interval-22)
+
+
+#Apply final LR model ----------
+data_2018$Prob_final <- predict(m_3_bw_re, data_2018, type="response")
+data_2018$Pred_final <- unlist(data_2018$Prob_final, use.names=FALSE)
+data_2018$Pred_final <- ifelse(data_2018$Pred_final < 0.003 ,"0", "1")
+data_2018$Pred_final <- as.factor(data_2018$Pred_final)
+table(data_2018$Pred_final)
