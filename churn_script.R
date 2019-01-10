@@ -111,13 +111,6 @@ library(h2o)
 # Imputed
 original_data = fread("Data/Data_January_2017_3_imputed.csv", na.strings = "NA", dec = ",")
 
-
-# L
-data = fread("Data/Data_January_2017_3_imputed.csv", na.strings = "NA", dec = ",")
-
-# Mac
-data = fread("Data/Data_January_2017_3.csv", na.strings = "NA", dec = ",")
-
 # Mac
 original_data = fread("Data/Data_January_2017_3.csv", na.strings = "NA", dec = ",")
 
@@ -465,7 +458,7 @@ data = data[, .(Churn,
                 MA_Erweitert,
                 MA_Restlich,
                 Recovered, 
-                Zip_code,
+                # Zip_code,
                 Continuous_relationship, 
                 Age, 
                 Consumption, 
@@ -475,17 +468,6 @@ data = data[, .(Churn,
                 Minimum_contract_term, 
                 Customer_since_interval,
                 Contract_start_date_interval)]
-
-#Read csv files
-geo_at = fread("Data/Geo/geodaten_at.csv", na.strings = "NA", dec = ",")
-geo_ch = fread("Data/Geo/geodaten_ch.csv", na.strings = "NA", dec = ",")
-geo_de = fread("Data/Geo/geodaten_de.csv", na.strings = "NA", dec = ",")
-population_de = fread("Data/Geo/plz_einwohner.csv", na.strings = "NA", dec = ",")
-geo_data = left_join(geo_de, population_de, by = c("Plz"="plz"))
-
-#Join longtitude, lattitude, and population
-geo_data$Plz = as.character(geo_data$Plz)
-test = left_join(data, geo_data, by = c("Zip_code"="Plz"))
 
 
 # Convert features of the preparaed data into right format for modeling 
@@ -1065,22 +1047,8 @@ metrics %>%
 
 # Cluster Analysis --------------------------------------------------------
 
-data_2018 = fread("Data\\Data_Nov_2018_predicted_v1.csv", na.strings = "NA", dec = ",")
-
-data_2018$DBII = as.numeric(data_2018$DBII)
-data_2018$Annual_account = as.numeric(data_2018$Annual_account)
-
-data_2018 = as.data.table(data_2018)
-
-apply(scaled_ds, 2, function(col)sum(is.na(col))/length(col))
-imp_data = mice(data_2018) 
-data_2018 <- complete(imp_data)
-
 #Feature selection for clustering (identical to modeling data set)
-
-data_cl = data_2018[,-1]
-
-data_cl = data_2018[,.(Churn, 
+data_cl = data[, .(Churn, 
                 Client_type, 
                 Bill_shock, 
                 Online_account, 
@@ -1105,8 +1073,6 @@ data_cl = data_2018[,.(Churn,
 #Select churners from the data set
 churners = data_cl[which(data_cl$Churn=="Yes"),]
 
-length(which(churners$Client_type==1))
-
 #Focus on private customers, as there were only 4 corporate churners
 private_churners <- churners[which(churners$Client_type==0),]
 
@@ -1130,31 +1096,7 @@ cluster_ds = private_churners[,.(Bill_shock,
                                  Customer_since_interval,
                                  Contract_start_date_interval)]
 
-#Remove only churn
-cluster_ds = churners[,.(Client_type, 
-                         Bill_shock, 
-                         Online_account, 
-                         Opt_In_Mail, 
-                         Opt_In_Post, 
-                         Opt_In_Tel, 
-                         MA_Grundversorger,
-                         MA_Erweitert,
-                         MA_Restlich,
-                         Recovered, 
-                         Continuous_relationship, 
-                         Age, 
-                         Consumption, 
-                         Notice_period, 
-                         Annual_account, 
-                         DBII, 
-                         Minimum_contract_term, 
-                         Customer_since_interval,
-                         Contract_start_date_interval)]
-
 #Transform to numeric features
-cluster_ds$Client_type = as.numeric(cluster_ds$Client_type)
-cluster_ds$Notice_period = as.numeric(cluster_ds$Notice_period)
-
 cluster_ds$Bill_shock = as.numeric(cluster_ds$Bill_shock)
 cluster_ds$Online_account = as.numeric(cluster_ds$Online_account)
 cluster_ds$Opt_In_Mail = as.numeric(cluster_ds$Opt_In_Mail)
@@ -1174,16 +1116,15 @@ cluster_ds$Customer_since_interval = as.numeric(cluster_ds$Customer_since_interv
 cluster_ds$Contract_start_date_interval = as.numeric(cluster_ds$Contract_start_date_interval)
 
 #Scale values for clustering algorithm
-cluster_sample = cluster_ds[sample(nrow(cluster_ds), 5000), ]
-scaled_ds <- scale(cluster_sample)
+scaled_ds <- scale(cluster_ds)
+
 
 removed = c()
 max_result = c()
 min_result = c()
 
-for(k in c(30,50)){
-  #scaled_ds <- scale(cluster_ds)
-  scaled_ds <- scale(cluster_sample)
+for(k in c(5:15)){
+  scaled_ds <- scale(cluster_ds)
   removed = c()
   max_result = c()
   min_result = c()
@@ -1214,7 +1155,7 @@ for (j in c(1:10)){
   removed = c(removed, colnames(scaled_ds)[remove_col])
   scaled_ds <- scaled_ds[,-remove_col]
 }
-  if(k == 30){
+  if(k == 5){
   feature_selection_analysis <- data.frame("minPts" = k,"#classes"=cclass, "avg.silwidth" = max_result, "Order of elimination" = removed)
   }else{
     feature_selection_analysis = cbind(feature_selection_analysis,data.frame("minPts" = k,"#classes"=cclass, "avg.silwidth" = max_result, "Order of elimination" = removed))
@@ -1244,19 +1185,13 @@ test = scaled_ds[,c("Online_account",
                     )]
 hdb <- hdbscan(test, minPts = 7)
 
-
-
 #Calculate validation metrics and stats for different parameters
-set.seed(19)
-
-
 parameter_comparison <- data.frame(minPts=int(),"Dunn"=double(),"Entropy"=double(),"Avg. silwidth"=double())
-for (j in c(10,20,30,40,50)){
+for (j in c(5:15)){
   hdb <- hdbscan(scaled_ds, minPts = j)
   stat = cluster.stats(dist(scaled_ds),hdb$cluster)
   parameter_comparison = rbind(parameter_comparison,data.frame("minPts"=j,"Dunn"=stat$dunn,"Entropy"=stat$entropy,"Avg. silwidth"=stat$avg.silwidth))
 }
-hdb <- hdbscan(scaled_ds, minPts = 180)
 
 #Analyse indicators and select minPts based on results
 parameter_comparison
@@ -1285,7 +1220,7 @@ ggplot(d_tsne_1, aes_string(x="V1", y="V2", color="cl_hdbscan")) +
         legend.box = "horizontal") 
 
 #Add assigned clusters to input data
-cs_result = as.data.table(cbind(cluster_ds, "Cluster" = as.character(hdb$cluster)))
+cs_result = cbind(cluster_ds, "Cluster" = as.character(hdb$cluster))
 
 #Visualized feature distribution with assigned clusters
 #Continuous variables
@@ -1375,7 +1310,7 @@ cs_result[DBII > 0 & DBII <= 30 ] %>% drop_na() %>%
   scale_color_tableau() +
   scale_fill_tableau()
 
-ggplot(cs_result[which(cs_result$Cluster!=0)&DBII > 0 & DBII <= 30 ,], aes(x=Cluster, y=DBII)) + 
+ggplot(cs_result[which(cs_result$Cluster!=0),], aes(x=Cluster, y=DBII)) + 
   geom_boxplot()+
   ggtitle("Boxplot DBII")
 
