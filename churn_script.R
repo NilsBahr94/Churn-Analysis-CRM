@@ -266,7 +266,7 @@ data$Continuous_relationship = as.factor(data$Continuous_relationship)
 # Imputation  --------------------------------------------------------------
 
 # Detect Percentage of NA's per feature
-apply(data, 2, function(col)sum(is.na(col))/length(col))
+apply(test, 2, function(col)sum(is.na(col))/length(col))
 # md.pattern(data, plot= T)
 # md.pairs(data)
 # 
@@ -485,7 +485,7 @@ geo_data = left_join(geo_de, population_de, by = c("Plz"="plz"))
 
 #Join longtitude, lattitude, and population
 geo_data$Plz = as.character(geo_data$Plz)
-test = left_join(data, geo_data, by = c("Zip_code"="Plz"))
+test = left_join(data, geo_data[,-2], by = c("Zip_code"="Plz"))
 
 
 # Convert features of the preparaed data into right format for modeling 
