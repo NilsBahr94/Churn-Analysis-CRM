@@ -32,6 +32,8 @@ install.packages("MLmetrics")
 install.packages("ISLR")
 install.packages("randomForest")
 install.packages("gridExtra")
+install.packages("fpc")
+install.packages("Rtsne")
 # Install dependencies for H20
 install.packages("RCurl")
 install.packages("bitops")
@@ -90,7 +92,8 @@ library(MLmetrics)
 library(ISLR)
 library(randomForest)
 require(lubridate)
-
+library(fpc)
+library(Rtsne)
 # Dependencies for H20
 require(RCurl)
 require(bitops)
@@ -108,7 +111,7 @@ library(h2o)
 
 
 # L
-data = fread("Data/Data_January_2017_3.csv", na.strings = "NA", dec = ",")
+data = fread("Data/Data_January_2017_3_imputed.csv", na.strings = "NA", dec = ",")
 
 # N
 data = fread("Data\\Data_January_2017_3.csv", na.strings = "NA", dec = ",")
@@ -158,6 +161,7 @@ data = data[,c("Contract_ID",
   
 # Data Preparation --------------------------------------------------------
   
+  #data$Consumption = data$Consumption/100000000000000  
 # Online Account - NA to 0 
 data$Online_account[is.na(data$Online_account)] = 0
 
@@ -368,7 +372,7 @@ data[, .(Client_type,
          Opt_In_Mail, 
          Opt_In_Post, 
          Opt_In_Tel, 
-         Market_area, 
+         Market_Area, 
          Recovered, 
          Continuous_relationship, 
          Churn)] %>% drop_na() %>%
@@ -959,54 +963,338 @@ metrics %>%
 
 # Cluster Analysis --------------------------------------------------------
 
-#Select subset of features (namely all except for client_ID and Zip_code)
-churners = data[which(data$Churn=="Yes"),]
+#Feature selection for clustering (identical to modeling data set)
+data_cl = data[, .(Churn, 
+                Client_type, 
+                Bill_shock, 
+                Online_account, 
+                Opt_In_Mail, 
+                Opt_In_Post, 
+                Opt_In_Tel, 
+                MA_Grundversorger,
+                MA_Erweitert,
+                MA_Restlich,
+                Recovered, 
+                Continuous_relationship, 
+                Age, 
+                Consumption, 
+                Notice_period, 
+                Annual_account, 
+                DBII, 
+                Minimum_contract_term, 
+                Customer_since_interval,
+                Contract_start_date_interval)]
 
+
+#Select churners from the data set
+churners = data_cl[which(data_cl$Churn=="Yes"),]
+
+#Focus on private customers, as there were only 4 corporate churners
 private_churners <- churners[which(churners$Client_type==0),]
 
-cluster_df = (private_churners[,c("Age", 
-                          "Duration_of_customer_relationship", 
-                          "Minimum_contract_term", 
-                          "Consumption", 
-                          "Payment_on_account", 
-                          "Annual_account", 
-                          "Bill_shock", 
-                          "Online_account",
-                          "Opt_In_Mail", 
-                          "Opt_In_Post", 
-                          "Opt_In_Tel", 
-                          "Recovered", 
-                          "DBII", 
-                          "MA_Grundversorger", 
-                          "MA_Erweitert", 
-                          "MA_Restlich")])
+#Remove churn and Client_type from the cluster dataset, because these features are constants due to prior filter
+#Furthermore remove notice_period as the value is constant for all churners
+cluster_ds = private_churners[,.(Bill_shock, 
+                                 Online_account, 
+                                 Opt_In_Mail, 
+                                 Opt_In_Post, 
+                                 Opt_In_Tel, 
+                                 MA_Grundversorger,
+                                 MA_Erweitert,
+                                 MA_Restlich,
+                                 Recovered, 
+                                 Continuous_relationship, 
+                                 Age, 
+                                 Consumption, 
+                                 Annual_account, 
+                                 DBII, 
+                                 Minimum_contract_term, 
+                                 Customer_since_interval,
+                                 Contract_start_date_interval)]
 
 #Transform to numeric features
-cluster_df$Age = as.numeric(cluster_df$Age)
-cluster_df$Duration_of_customer_relationship = as.numeric(cluster_df$Duration_of_customer_relationship)
-cluster_df$Minimum_contract_term = as.numeric(cluster_df$Minimum_contract_term)
-cluster_df$Consumption = as.numeric(cluster_df$Consumption)
-cluster_df$Payment_on_account = as.numeric(cluster_df$Payment_on_account)
-cluster_df$Annual_account = as.numeric(cluster_df$Annual_account)
-cluster_df$Bill_shock = as.numeric(cluster_df$Bill_shock)
-cluster_df$Online_account = as.numeric(cluster_df$Online_account)
-cluster_df$Opt_In_Mail = as.numeric(cluster_df$Opt_In_Mail)
-cluster_df$Opt_In_Post = as.numeric(cluster_df$Opt_In_Post)
-cluster_df$Opt_In_Tel = as.numeric(cluster_df$Opt_In_Tel)
-cluster_df$Recovered = as.numeric(cluster_df$Recovered)
-cluster_df$DBII = as.numeric(cluster_df$DBII)
-cluster_df$MA_Grundversorger = as.numeric(cluster_df$MA_Grundversorger)
-cluster_df$MA_Erweitert = as.numeric(cluster_df$MA_Erweitert)
-cluster_df$MA_Restlich = as.numeric(cluster_df$MA_Restlich)
+cluster_ds$Bill_shock = as.numeric(cluster_ds$Bill_shock)
+cluster_ds$Online_account = as.numeric(cluster_ds$Online_account)
+cluster_ds$Opt_In_Mail = as.numeric(cluster_ds$Opt_In_Mail)
+cluster_ds$Opt_In_Post = as.numeric(cluster_ds$Opt_In_Post)
+cluster_ds$Opt_In_Tel = as.numeric(cluster_ds$Opt_In_Tel)
+cluster_ds$MA_Grundversorger = as.numeric(cluster_ds$MA_Grundversorger)
+cluster_ds$MA_Erweitert = as.numeric(cluster_ds$MA_Erweitert)
+cluster_ds$MA_Restlich = as.numeric(cluster_ds$MA_Restlich)
+cluster_ds$Recovered = as.numeric(cluster_ds$Recovered)
+cluster_ds$Continuous_relationship = as.numeric(cluster_ds$Continuous_relationship)
+cluster_ds$Age = as.numeric(cluster_ds$Age)
+cluster_ds$Consumption = as.numeric(cluster_ds$Consumption)
+cluster_ds$Annual_account = as.numeric(cluster_ds$Annual_account)
+cluster_ds$DBII = as.numeric(cluster_ds$DBII)
+cluster_ds$Minimum_contract_term = as.numeric(cluster_ds$Minimum_contract_term)
+cluster_ds$Customer_since_interval = as.numeric(cluster_ds$Customer_since_interval)
+cluster_ds$Contract_start_date_interval = as.numeric(cluster_ds$Contract_start_date_interval)
 
 #Scale values for clustering algorithm
-scaled_ds <- scale(cluster_df)
+scaled_ds <- scale(cluster_ds)
+
+
+removed = c()
+max_result = c()
+min_result = c()
+
+for(k in c(5:15)){
+  scaled_ds <- scale(cluster_ds)
+  removed = c()
+  max_result = c()
+  min_result = c()
+  cclass = c()
+  
+for (j in c(1:10)){
+  result = c()
+  for (i in c(1:ncol(scaled_ds))){
+    m=c()
+    
+    hdb <- hdbscan(as.matrix(scaled_ds[,-i]), minPts = k)
+      if(length(unique(hdb$cluster))!=1){
+      m = cluster.stats(dist(scaled_ds[,-i]),hdb$cluster)$avg.silwidth
+      class = c(class,length(unique(which(hdb$cluster!=0))))
+    }else{
+        m = 10
+    }
+      
+    #m = cluster.stats(dist(scaled_ds[,-i]),hdb$cluster)$entropy
+    result <- c(result,m)
+    
+  }
+  cclass = c(cclass,length(unique(hdb$cluster[which(hdb$cluster!=0)])))
+  remove_col = which(result == max(result))
+  #remove_col = which(result == min(result))
+  max_result = c(max_result,max(result))
+  #min_result = c(min_result,min(result))
+  removed = c(removed, colnames(scaled_ds)[remove_col])
+  scaled_ds <- scaled_ds[,-remove_col]
+}
+  if(k == 5){
+  feature_selection_analysis <- data.frame("minPts" = k,"#classes"=cclass, "avg.silwidth" = max_result, "Order of elimination" = removed)
+  }else{
+    feature_selection_analysis = cbind(feature_selection_analysis,data.frame("minPts" = k,"#classes"=cclass, "avg.silwidth" = max_result, "Order of elimination" = removed))
+    
+  }
+}
+
+
+#try minPts = 7 ignore minimum_contract_term, Bill_shock, contract_start_date_interval, age, customer_since_interval, consumption
+test = scaled_ds[,c("Online_account", 
+                                 "Opt_In_Mail", 
+                                 "Opt_In_Post", 
+                                 "Opt_In_Tel", 
+                                 "MA_Grundversorger",
+                                 "MA_Erweitert",
+                                 "MA_Restlich",
+                                 "Recovered", 
+                                 "Continuous_relationship", 
+                                 #"Age", 
+                                 #"Consumption", 
+                                 "Annual_account", 
+                                 "DBII"
+                                 #"Bill_shock",
+                                 #"Minimum_contract_term", 
+                                 #"Customer_since_interval"
+                                 #"Contract_start_date_interval"
+                    )]
+hdb <- hdbscan(test, minPts = 7)
+
+#Calculate validation metrics and stats for different parameters
+parameter_comparison <- data.frame(minPts=int(),"Dunn"=double(),"Entropy"=double(),"Avg. silwidth"=double())
+for (j in c(5:15)){
+  hdb <- hdbscan(scaled_ds, minPts = j)
+  stat = cluster.stats(dist(scaled_ds),hdb$cluster)
+  parameter_comparison = rbind(parameter_comparison,data.frame("minPts"=j,"Dunn"=stat$dunn,"Entropy"=stat$entropy,"Avg. silwidth"=stat$avg.silwidth))
+}
+
+#Analyse indicators and select minPts based on results
+parameter_comparison
 
 #Execute HDBSCAN clustering algorithm for private customers churners
 hdb <- hdbscan(scaled_ds, minPts = 10)
+hdb$cluster_scores
 plot(hdb, show_flat = TRUE)
 
-cs_result = cbind(churners[churners$Client_type==0,], "Cluster" = hdb$cluster)
+#Visualizing clusters in tsne transformed data for minPts verification
+set.seed(29)  
+tsne_model_1 = Rtsne(as.matrix(scaled_ds), check_duplicates=FALSE, pca=TRUE, perplexity=30, theta=0.5, dims=2)
+d_tsne_1 = as.data.frame(tsne_model_1$Y)
+d_tsne_1$cl_hdbscan = factor(hdb$cluster)
+
+ggplot(d_tsne_1, aes_string(x="V1", y="V2", color="cl_hdbscan")) +
+  geom_point(size=1.25) +
+  guides(colour=guide_legend(override.aes=list(size=6))) +
+  xlab("") + ylab("") +
+  ggtitle("") +
+  theme_light(base_size=20) +
+  theme(axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        legend.direction = "horizontal", 
+        legend.position = "bottom",
+        legend.box = "horizontal") 
+
+#Add assigned clusters to input data
+cs_result = cbind(cluster_ds, "Cluster" = as.character(hdb$cluster))
+
+#Visualized feature distribution with assigned clusters
+#Continuous variables
+cs_result[,.(Consumption, 
+        Annual_account, 
+        DBII, 
+        Age,
+        Minimum_contract_term, 
+        Customer_since_interval,
+        Contract_start_date_interval,Cluster)] %>% drop_na() %>%
+  gather(x, y, Consumption:Contract_start_date_interval) %>%
+  ggplot(aes(x = y, fill = Cluster, color = Cluster)) +
+  facet_wrap(~ x, ncol = 3, scales = "free") +
+  geom_density(alpha = 0.5) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "top") +
+  scale_color_tableau() +
+  scale_fill_tableau()
+
+#Categorical variables
+cs_result[, .(Bill_shock, 
+         Online_account,
+         MA_Grundversorger,
+         MA_Erweitert,
+         MA_Restlich,
+         Opt_In_Mail, 
+         Opt_In_Post, 
+         Opt_In_Tel, 
+         Recovered, 
+         Continuous_relationship, 
+         Cluster)] %>% drop_na() %>%
+  gather(x, y, Bill_shock:Continuous_relationship) %>%
+  count(Cluster, x, y) %>%
+  ggplot(aes(x = y, y = n, fill = Cluster, color = Cluster)) +
+  facet_wrap(~ x, ncol = 3, scales = "free") +
+  geom_bar(stat = "identity", alpha = 0.5) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "top") +
+  scale_color_tableau() +
+  scale_fill_tableau()
+
+#Closer look on continuous features using distributions and boxplots
+#Annual Account
+cs_result[Annual_account > -150 & Annual_account <= 400 ] %>% drop_na() %>%
+  ggplot(aes(x = Annual_account, fill = Cluster, color = Cluster)) +
+  geom_density(alpha = 0.5) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "top") +
+  scale_color_tableau() +
+  scale_fill_tableau()
+
+ggplot(cs_result[which(cs_result$Cluster!=0),], aes(x=Cluster, y=Annual_account)) + 
+  geom_boxplot()+
+  ggtitle("Boxplot Annual_account")
+
+boxplot.stats(cs_result[which(cs_result$Cluster==1)]$Annual_account)
+boxplot.stats(cs_result[which(cs_result$Cluster==2)]$Annual_account)
+
+mean(cs_result[which(cs_result$Cluster==1)]$Annual_account)
+mean(cs_result[which(cs_result$Cluster==2)]$Annual_account)
+
+#Age
+cs_result[Age > 0 & Age < 100 ] %>% drop_na() %>%
+  ggplot(aes(x = Age, fill = Cluster, color = Cluster)) +
+  geom_density(alpha = 0.5) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "top") +
+  scale_color_tableau() +
+  scale_fill_tableau()
+
+ggplot(cs_result[which(cs_result$Cluster!=0),], aes(x=Cluster, y=Age)) + 
+  geom_boxplot()+
+  ggtitle("Boxplot Age")
+
+boxplot.stats(cs_result[which(cs_result$Cluster==1)]$Age)
+boxplot.stats(cs_result[which(cs_result$Cluster==2)]$Age)
+
+mean(cs_result[which(cs_result$Cluster==1)]$Age)
+mean(cs_result[which(cs_result$Cluster==2)]$Age)
+
+#DBII
+cs_result[DBII > 0 & DBII <= 30 ] %>% drop_na() %>%
+  ggplot(aes(x = DBII, fill = Cluster, color = Cluster)) +
+  geom_density(alpha = 0.5) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "top") +
+  scale_color_tableau() +
+  scale_fill_tableau()
+
+ggplot(cs_result[which(cs_result$Cluster!=0),], aes(x=Cluster, y=DBII)) + 
+  geom_boxplot()+
+  ggtitle("Boxplot DBII")
+
+boxplot.stats(cs_result[which(cs_result$Cluster==1)]$DBII)
+boxplot.stats(cs_result[which(cs_result$Cluster==2)]$DBII)
+
+mean(cs_result[which(cs_result$Cluster==1)]$DBII)
+mean(cs_result[which(cs_result$Cluster==2)]$DBII)
+
+#Consumption
+cs_result[Consumption > 0 & Consumption <= 7500 ] %>% drop_na() %>%
+  ggplot(aes(x = Consumption, fill = Cluster, color = Cluster)) +
+  geom_density(alpha = 0.5) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "top") +
+  scale_color_tableau() +
+  scale_fill_tableau()
+
+ggplot(cs_result[which(cs_result$Cluster!=0),], aes(x=Cluster, y=Consumption)) + 
+  geom_boxplot()+
+  ggtitle("Boxplot Consumption")
+
+boxplot.stats(cs_result[which(cs_result$Cluster==1)]$Consumption)
+boxplot.stats(cs_result[which(cs_result$Cluster==2)]$Consumption)
+
+mean(cs_result[which(cs_result$Cluster==1)]$Consumption)
+mean(cs_result[which(cs_result$Cluster==2)]$Consumption)
+
+
+#Customer_since_interval NOT DONE
+cs_result[Customer_since_interval > 0 & Customer_since_interval <= 7500 ] %>% drop_na() %>%
+  ggplot(aes(x = Customer_since_interval, fill = Cluster, color = Cluster)) +
+  geom_density(alpha = 0.5) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "top") +
+  scale_color_tableau() +
+  scale_fill_tableau()
+
+ggplot(cs_result[which(cs_result$Cluster!=0),], aes(x=Cluster, y=Customer_since_interval)) + 
+  geom_boxplot()+
+  ggtitle("Boxplot Customer_since_interval")
+
+boxplot.stats(cs_result[which(cs_result$Cluster==1)]$Customer_since_interval)
+boxplot.stats(cs_result[which(cs_result$Cluster==2)]$Customer_since_interval)
+
+mean(cs_result[which(cs_result$Cluster==1)]$Customer_since_interval)
+mean(cs_result[which(cs_result$Cluster==2)]$Customer_since_interval)
+
+#Contract_start_date_interval NOT DONE
+cs_result[Customer_since_interval > 0 & Contract_start_date_interval <= 7500 ] %>% drop_na() %>%
+  ggplot(aes(x = Contract_start_date_interval, fill = Cluster, color = Cluster)) +
+  geom_density(alpha = 0.5) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "top") +
+  scale_color_tableau() +
+  scale_fill_tableau()
+
+ggplot(cs_result[which(cs_result$Cluster!=0),], aes(x=Cluster, y=Contract_start_date_interval)) + 
+  geom_boxplot()+
+  ggtitle("Boxplot Customer_since_interval")
+
+boxplot.stats(cs_result[which(cs_result$Cluster==1)]$Contract_start_date_interval)
+boxplot.stats(cs_result[which(cs_result$Cluster==2)]$Contract_start_date_interval)
+
+mean(cs_result[which(cs_result$Cluster==1)]$Contract_start_date_interval)
+mean(cs_result[which(cs_result$Cluster==2)]$Contract_start_date_interval)
+
+
 
 # Import 2018 Data ----------------------------------------------------------------
 
