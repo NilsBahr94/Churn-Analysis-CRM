@@ -259,7 +259,7 @@ data$Continuous_relationship = as.factor(data$Continuous_relationship)
 # Imputation  --------------------------------------------------------------
 
 # Detect Percentage of NA's per feature
-apply(data, 2, function(col)sum(is.na(col))/length(col))
+apply(test, 2, function(col)sum(is.na(col))/length(col))
 # md.pattern(data, plot= T)
 # md.pairs(data)
 # 
@@ -458,7 +458,7 @@ data = data[, .(Churn,
                 MA_Erweitert,
                 MA_Restlich,
                 Recovered, 
-                # Zip_code,
+                Zip_code,
                 Continuous_relationship, 
                 Age, 
                 Consumption, 
@@ -469,6 +469,22 @@ data = data[, .(Churn,
                 Customer_since_interval,
                 Contract_start_date_interval)]
 
+#Read csv files
+geo_at = fread("Data/Geo/geodaten_at.csv", na.strings = "NA", dec = ",")
+geo_ch = fread("Data/Geo/geodaten_ch.csv", na.strings = "NA", dec = ",")
+geo_de = fread("Data/Geo/geodaten_de.csv", na.strings = "NA", dec = ",")
+population_de = fread("Data/Geo/plz_einwohner.csv", na.strings = "NA", dec = ",")
+geo_data = left_join(geo_de, population_de, by = c("Plz"="plz"))
+
+#Join longtitude, lattitude, and population
+geo_data$Plz = as.character(geo_data$Plz)
+data = left_join(data, geo_data[,-2], by = c("Zip_code"="Plz"))
+data$Longitude = is.numeric(data$Longitude)
+data$Latitude = is.numeric(data$Latitude)
+setnames(data, "einwohner", "Inhabitants")
+data$Inhabitants = is.numeric(data$Inhabitants)
+
+str(data)
 
 # Convert features of the preparaed data into right format for modeling 
 data$Churn = as.factor(data$Churn)
