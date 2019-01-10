@@ -54,7 +54,6 @@ for (pkg in pkgs) {
 # Now we download, install and initialize the H2O package for R.
 install.packages("h2o", type="source", repos="http://h2o-release.s3.amazonaws.com/h2o/rel-xu/1/R")
 
-# Finally, let's load H2O and start up an H2O cluster
 
 # Load Packages ------------------------------------------------------------
 
@@ -110,10 +109,15 @@ library(h2o)
 # write.csv2(data_2017, "Data/Data_January_2017_3.csv")
 
 
+<<<<<<< HEAD
 # L
 data = fread("Data/Data_January_2017_3_imputed.csv", na.strings = "NA", dec = ",")
+=======
+# Mac
+data = fread("Data/Data_January_2017_3.csv", na.strings = "NA", dec = ",")
+>>>>>>> 125c225c43f5ee7af242056d6b61823807676e8d
 
-# N
+# Windows
 data = fread("Data\\Data_January_2017_3.csv", na.strings = "NA", dec = ",")
 
 #remove title and V1 from the data set
@@ -140,25 +144,25 @@ data = data[,c("Contract_ID",
                  "DBII", 
                  "Churn")]
   
-  #rename cols in order to avoid problems with imputation
+#rename cols in order to avoid problems with imputation
   
-  names(data)[names(data) == 'Client type'] <- 'Client_type' # Customer since, Notice Period, Automatic Contract extension
-  names(data)[names(data) == 'Zip code'] <- 'Zip_code'
-  names(data)[names(data) == 'Duration of customer relationship'] <- 'Duration_of_customer_relationship'  
-  names(data)[names(data) == 'Customer since' ] <- 'Customer_since' 
-  names(data)[names(data) == 'Contract start date' ] <- 'Contract_start_date' 
-  names(data)[names(data) == 'Minimum contract term'] <- 'Minimum_contract_term'
-  names(data)[names(data) == 'Notice period' ] <- 'Notice_period' 
-  names(data)[names(data) == 'Automatic contract extension' ] <- 'Automatic_contract_extension' 
-  names(data)[names(data) == 'Payment on account'] <- 'Payment_on_account'
-  names(data)[names(data) == 'Annual account'] <- 'Annual_account'
-  names(data)[names(data) == 'Bill shock'] <- 'Bill_shock'
-  names(data)[names(data) == 'Online account'] <- 'Online_account'
-  names(data)[names(data) == 'Opt In Mail'] <- 'Opt_In_Mail'
-  names(data)[names(data) == 'Opt In Post'] <- 'Opt_In_Post'
-  names(data)[names(data) == 'Opt In Tel'] <- 'Opt_In_Tel'
-  names(data)[names(data) == 'Market area'] <- 'Market_area'
-  
+names(data)[names(data) == 'Client type'] <- 'Client_type' # Customer since, Notice Period, Automatic Contract extension
+names(data)[names(data) == 'Zip code'] <- 'Zip_code'
+names(data)[names(data) == 'Duration of customer relationship'] <- 'Duration_of_customer_relationship'  
+names(data)[names(data) == 'Customer since' ] <- 'Customer_since' 
+names(data)[names(data) == 'Contract start date' ] <- 'Contract_start_date' 
+names(data)[names(data) == 'Minimum contract term'] <- 'Minimum_contract_term'
+names(data)[names(data) == 'Notice period' ] <- 'Notice_period' 
+names(data)[names(data) == 'Automatic contract extension' ] <- 'Automatic_contract_extension' 
+names(data)[names(data) == 'Payment on account'] <- 'Payment_on_account'
+names(data)[names(data) == 'Annual account'] <- 'Annual_account'
+names(data)[names(data) == 'Bill shock'] <- 'Bill_shock'
+names(data)[names(data) == 'Online account'] <- 'Online_account'
+names(data)[names(data) == 'Opt In Mail'] <- 'Opt_In_Mail'
+names(data)[names(data) == 'Opt In Post'] <- 'Opt_In_Post'
+names(data)[names(data) == 'Opt In Tel'] <- 'Opt_In_Tel'
+names(data)[names(data) == 'Market area'] <- 'Market_area'
+
 # Data Preparation --------------------------------------------------------
   
   #data$Consumption = data$Consumption/100000000000000  
@@ -256,7 +260,7 @@ data$Continuous_relationship = as.factor(data$Continuous_relationship)
 # Imputation  --------------------------------------------------------------
 
 # Detect Percentage of NA's per feature
-# apply(data, 2, function(col)sum(is.na(col))/length(col))
+apply(data, 2, function(col)sum(is.na(col))/length(col))
 # md.pattern(data, plot= T)
 # md.pairs(data)
 # 
@@ -290,7 +294,7 @@ data[Age < 18, .N, by = Churn] # 9 Customers are younger than 18 years
 ## Consumption
 plot(data[, Consumption])
 summary(data[, Consumption])
-data[Consumption > 20000, .N, by = Client_type] # important to clarify what is really meant by consumption - counter reading at a given point in time which also factors in the consumption of the past years or really the consumption for a given time horizon by a single customer
+data[Consumption > 20000, .N, by = Client_type] 
 data[Consumption < 100, .N] # 233
 
 ## Payment on Account
@@ -346,6 +350,10 @@ table(data$Churn) / nrow(data)
 
 str(data)
 summary(data)
+
+ggpairs(data[, 11:21]) + theme(
+  axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+  axis.text.y = element_text(angle = 0, hjust = 1))
 
 # Correlation Plot
 corrplot.mixed(corr=cor(data[, .(Age, 
@@ -429,7 +437,7 @@ p2 = data[Consumption <= 15000] %>% drop_na() %>%
 
 # Consumption
 p3 = data %>% drop_na() %>%
-  ggplot(aes(x = Duration_of_customer_relationship, fill = Churn, color = Churn)) +
+  ggplot(aes(x = Customer_since_interval, fill = Churn, color = Churn)) +
   geom_density(alpha = 0.5) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1),
         legend.position = "top") +
@@ -476,7 +484,7 @@ data$MA_Restlich = as.numeric(as.character(data$MA_Restlich))
 data$Recovered = as.numeric(as.character(data$Recovered))
 data$Continuous_relationship = as.numeric(as.character(data$Continuous_relationship))
 data$Age = as.numeric(as.character(data$Age))
-data$Duration_of_customer_relationship = as.numeric(as.character(data$Duration_of_customer_relationship))
+# data$Duration_of_customer_relationship = as.numeric(as.character(data$Duration_of_customer_relationship))
 
 str(data)
 
@@ -626,7 +634,7 @@ imp_data$Contract_ID = as.character(imp_data$Contract_ID)
 imp_data$`Zip_code` = as.character(imp_data$`Zip_code`)
 imp_data$`Client_type` = as.factor(imp_data$`Client_type`)
 imp_data$Age = as.numeric(imp_data$Age)
-imp_data$Duration_of_customer_relationship = as.numeric(imp_data$Duration_of_customer_relationship)
+# imp_data$Duration_of_customer_relationship = as.numeric(imp_data$Duration_of_customer_relationship)
 imp_data$Minimum_contract_term = as.numeric(imp_data$Minimum_contract_term)
 imp_data$Notice_period = as.numeric(imp_data$Notice_period)
 imp_data$Automatic_contract_extension = as.numeric(imp_data$Automatic_contract_extension)
@@ -690,7 +698,7 @@ imp_data = imp_data[, .(Churn,
                 Recovered, 
                 Continuous_relationship, 
                 Age, 
-                Duration_of_customer_relationship, 
+                # Duration_of_customer_relationship, 
                 Consumption, 
                 Notice_period, 
                 Annual_account, 
@@ -791,14 +799,14 @@ cv_ctrl_smote <- trainControl(method = "cv", number = 10,
                               sampling = "smote") # Use Subsampling due to class imbalance
 
 # ROSE
-cv_ctrl_rose <- trainControl(method = "cv", number = 5,
+cv_ctrl_rose <- trainControl(method = "cv", number = 10,
                               summaryFunction = twoClassSummary,
                               classProbs = TRUE,
                               allowParallel=TRUE,
                               sampling = "rose")
 
 # No resampling
-cv_ctrl_no <- trainControl(method = "cv", number = 5,
+cv_ctrl_no <- trainControl(method = "cv", number = 10,
                              summaryFunction = twoClassSummary,
                              classProbs = TRUE,
                              allowParallel=TRUE)
@@ -833,12 +841,12 @@ xgb_model_resampling = function(resampling_method, tune_grid){
         trControl=resampling_method,  #change between cv_ctrl_smote, cv_ctrl_down, cv_ctrl_up, cv_ctrl_rose 
         tuneGrid=tune_grid,
         verbose=T,
-        metric="ROC", # ROC, Kappa does not work
+        metric="ROC", # ROC
         nthread =3)
   return(xgb_model)
-} 
+}
 
-xgb_tune = xgb_model_resampling(resampling_method=cv_ctrl_no, tune_grid = xgb_grid2)
+xgb_tune = xgb_model_resampling(resampling_method=cv_ctrl_down, tune_grid = xgb_grid1)
 xgb_tune
 
 # Predict with final model
@@ -848,7 +856,7 @@ confusionMatrix(xgb_pred, xgb_test_data$Churn)
 ###  Model Predictions and Performance
 # Evaluate performance
 xgb_tune_results = as.data.table(xgb_tune$results)
-xgb_tune_results$crm_eval = 3*xgb_tune_results$Sens + xgb_tune_results$Spec
+xgb_tune_results$crm_eval = 1.5*xgb_tune_results$Sens + xgb_tune_results$Spec
 max(xgb_tune_results$crm_eval)
 
 View(xgb_tune_results)
@@ -859,6 +867,37 @@ evalResults <- data.frame(Churn = xgb_test_test$Churn)
 evalResults$xgb <- predict(xgb_tune,
                            newdata = xgb_test_data[,-1],
                            type = "prob")
+
+
+# list(metrics_down_grid_1, )
+
+# Create final grid with best results
+
+xgb_grid_specified <- expand.grid(nrounds = 150,
+                                  max_depth = 3,
+                                  eta = 0.0001,
+                                  gamma = 0,
+                                  colsample_bytree = 0.4,
+                                  min_child_weight = 1,
+                                  subsample = 1)
+
+xgb_model_specified = 
+  train(x= as.matrix(xgb_train_data[, -1]),
+        y= as.factor(xgb_train_data$Churn),
+        method="xgbTree",
+        trControl=cv_ctrl_down,  #change between cv_ctrl_smote, cv_ctrl_down, cv_ctrl_up, cv_ctrl_rose 
+        tuneGrid=xgb_grid_specified,
+        verbose=T,
+        metric="ROC", # ROC
+        nthread =3)
+
+# Evaluate performance
+xgb_model_specified_results = as.data.table(xgb_model_specified$results)
+xgb_model_specified_results$crm_eval = 1.5*xgb_model_specified_results$Sens + xgb_model_specified_results$Spec
+max(xgb_model_specified_results$crm_eval)
+
+View(xgb_model_specified_results)
+
 
 
 # f) H2o ---------------------------------------------------------------------
@@ -942,9 +981,9 @@ plot(perf)
 
 # Metrics Overview
 metrics <- as.data.table(h2o.metric(perf))
-metrics$crm_eval_correct = 3*(metrics$tns/(metrics$tns+metrics$fps))+(metrics$tps)/(metrics$tps+metrics$fns) # max 1. 3.094811
+# metrics$crm_eval_correct = 3*(metrics$tns/(metrics$tns+metrics$fps))+(metrics$tps)/(metrics$tps+metrics$fns) # max 1. 3.094811
 max(metrics$crm_eval_correct)
-metrics$crm_eval_final = 3*metrics$recall + metrics$specificity # Calculation is not correct 
+metrics$crm_eval_final = 1.5*metrics$recall + metrics$specificity  
 max(metrics$crm_eval_final)
 View(metrics) 
 
@@ -1301,8 +1340,8 @@ mean(cs_result[which(cs_result$Cluster==2)]$Contract_start_date_interval)
 #data_2018 = read_excel("Data\\Data November 2018.xlsx", na = "-", col_types = c("text","guess","guess","text","guess","guess","guess","guess","guess","guess","guess","numeric","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess"))
 #write.csv2(data_2018, "Data\\Data_November_2018.csv")
 
-data_2018 = read_excel("Data/Data November 2018.xlsx", na = "-", col_types = c("text","guess","guess","text","guess","guess","guess","guess","guess","guess","guess","numeric","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess"))
-write.csv2(data_2018, "Data/Data_November_2018.csv")
+# data_2018 = read_excel("Data/Data November 2018.xlsx", na = "-", col_types = c("text","guess","guess","text","guess","guess","guess","guess","guess","guess","guess","numeric","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess"))
+# write.csv2(data_2018, "Data/Data_November_2018.csv")
 
 #Mac
 data_2018 = fread("Data/Data_November_2018.csv", na.strings = "NA", dec = ",")
@@ -1310,7 +1349,7 @@ data_2018 = fread("Data/Data_November_2018.csv", na.strings = "NA", dec = ",")
 #Windows
 data_2018 = fread("Data\\Data_November_2018.csv", na.strings = "NA", dec = ",")
 
-# Data Preparation -----------------
+# Data Preparation 
 #remove title and V1 from the data set
 data_2018 = data_2018[,c("Contract_ID", 
                "Client type", 
@@ -1438,24 +1477,8 @@ data_2018$Age[data_2018$Age < 18] = NA
 summary(data_2018)
 str(data_2018)
 
-# Correlation Plot
-corrplot.mixed(corr=cor(data_2018[, .(Age, 
-                                 Duration_of_customer_relationship, 
-                                 Notice_period,
-                                 Consumption, 
-                                 Payment_on_account,
-                                 Annual_account, 
-                                 DBII, 
-                                 Minimum_contract_term, 
-                                 Customer_since_interval,
-                                 Contract_start_date_interval, 
-                                 Actual_payment)], use="complete.obs", method="pearson"), 
-                                 upper="ellipse", 
-                                 tl.pos="lt")
-
 # Final Dataset
-data_2018 = data_2018[, .(Churn, 
-                      Client_type, 
+data_2018 = data_2018[, .(Client_type, 
                       Bill_shock, 
                       Online_account, 
                       Opt_In_Mail, 
@@ -1476,7 +1499,6 @@ data_2018 = data_2018[, .(Churn,
                       Contract_start_date_interval)]
 
 # Convert features of the preparaed data into right format for modeling 
-data_2018$Churn = as.factor(data_2018$Churn)
 data_2018$Client_type = as.numeric(as.character(data_2018$Client_type))
 data_2018$Bill_shock = as.numeric(as.character(data_2018$Bill_shock))
 data_2018$Online_account = as.numeric(as.character(data_2018$Online_account))
@@ -1489,14 +1511,18 @@ data_2018$MA_Restlich = as.numeric(as.character(data_2018$MA_Restlich))
 data_2018$Recovered = as.numeric(as.character(data_2018$Recovered))
 data_2018$Continuous_relationship = as.numeric(as.character(data_2018$Continuous_relationship))
 data_2018$Age = as.numeric(as.character(data_2018$Age))
-data_2018$Duration_of_customer_relationship = as.numeric(as.character(data_2018$Duration_of_customer_relationship))
+# data_2018$Duration_of_customer_relationship = as.numeric(as.character(data_2018$Duration_of_customer_relationship))
 
 str(data_2018)
 
-# Change order of factor levels such that "Yes" is interpreted as positive and "No" is interpreted as negative 
-levels(data_2018$Churn)
-data_2018$Churn = factor(data_2018$Churn, levels = c("Yes", "No"))
-levels(data_2018$Churn)
+# Predict 2018 Data -------
+
+data_2018_predicted = data_2018
+data_2018_predicted$Churn = predict(xgb_model_specified, newdata = data_2018)
+
+data_2018_predicted[, .N, by = Churn]
+
+write.csv(data_2018_predicted, "Data/Data_Nov_2018_predicted_v1.csv")
 
 
 # Deprecated --------------------------------------------------------------
@@ -1706,6 +1732,9 @@ xgb_data$Continuous_relationship = as.numeric(as.character(xgb_data$Continuous_r
 xgb_data$Age = as.numeric(as.character(xgb_data$Age))
 xgb_data$Duration_of_customer_relationship = as.numeric(as.character(xgb_data$Duration_of_customer_relationship))
 
+
+
+
 str(xgb_data)
 
 # Change order of factor levels such that "Yes" is interpreted as positive and "No" is interpreted as negative 
@@ -1775,3 +1804,17 @@ pred <- h2o.predict(h2o_gbm, test_hf[, -1])
 perf <- h2o.performance(h2o_gbm, test_hf) 
 h2o.confusionMatrix(perf)
 plot(perf)
+
+# # Correlation Plot
+# corrplot.mixed(corr=cor(data_2018[, .(Age, 
+#                                  Notice_period,
+#                                  Consumption, 
+#                                  Payment_on_account,
+#                                  Annual_account, 
+#                                  DBII, 
+#                                  Minimum_contract_term, 
+#                                  Customer_since_interval,
+#                                  Contract_start_date_interval, 
+#                                  Actual_payment)], use="complete.obs", method="pearson"), 
+#                                  upper="ellipse", 
+#                                  tl.pos="lt")
