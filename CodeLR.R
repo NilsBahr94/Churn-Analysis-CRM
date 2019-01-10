@@ -254,7 +254,7 @@ data$Age[data$Age < 18] = NA
 private_customers$Age[private_customers$Age >= 105] = NA 
 private_customers$Age[private_customers$Age < 18] = NA
 
-#Datasets for LR -------------
+#Datasets for LR (corporate and private customers) -------------
 #Dataset without ContractID, Zip_code, and Age
 data1 = data[, .(Churn, 
                      Client_type, 
@@ -493,6 +493,10 @@ summary(m_2)
 anova(m_2, test="Chisq")
 vif(m_2)
 
+#Calcualte Model fit statistics
+PseudoR2(m_2, which = "all")
+hoslem.test(m_2$y, fitted(m_2, g=10))
+
 #Model backward selection
 
 m_2_bw <- stepAIC(m_2, direction="backward", trace = T)
@@ -500,18 +504,33 @@ summary(m_2_bw)
 vif(m_2_bw)
 g_2_bth$anova
 
+#Calcualte Model fit statistics
+library(DescTools)
+PseudoR2(m_2_bw, which = "all")
+library(ResourceSelection)
+hoslem.test(m_2_bw$y, fitted(m_2_bw), g=10)
 
 #Model forward selection 
 
 m_3 <- glm(Churn ~ 1, data = train_data, family = binomial) #Null model
 summary(m_3)
 m_3_fw <- stepAIC(m_3, direction="forward", trace = T, scope=list(upper=m_2,lower=m_3))
+summary(m_3_fw)
 vif(m_3_fw)
+
+#Calcualte Model fit statistics
+PseudoR2(m_3_fw, which = "all")
+hoslem.test(m_3_fw$y, fitted(m_3_fw, g=10))
 
 #Model forward and backward selection
 
 m_3_both <- stepAIC(m_3, direction="both", trace = T, scope=list(upper=m_2,lower=m_3))
+summary(m_3_both)
 vif(m_3_both)
+
+#Calcualte Model fit statistics
+PseudoR2(m_3_both, which = "all")
+hoslem.test(m_3_both$y, fitted(m_3_fw, g=10))
 
 #Rare events logistic regression (ReLogit) -------------
 
@@ -519,9 +538,6 @@ install.packages("Zelig")
 require(Zelig)
 
 #Influence of single IVs on DV -------------------------
-
-test_data$Churn = as.integer(test_data$Churn) #Required to run relogit model
-test_data$Churn = test_data$Churn-1
 
 train_data$Churn = as.integer(train_data$Churn) #Required to run relogit model
 train_data$Churn = train_data$Churn-1
@@ -600,12 +616,9 @@ require(caret)
 library(pROC)
 library(gplots)
 
-test_data$Churn <- as.factor(test_data$Churn)
-str(test_data)
-
 #m_2_re -----------------
 
-test_data$Pred_m_2_re <- ifelse(test_data$Prob_m_2_re > 0.05,"0", "1")
+test_data$Pred_m_2_re <- ifelse(test_data$Prob_m_2_re < 0.003,"0", "1")
 test_data$Pred_m_2_re <- as.factor(test_data$Pred_m_2_re)
 confusionMatrix(data = test_data$Pred_m_2_re, reference= test_data$Churn, positive = "1")
 
@@ -628,7 +641,7 @@ coords(roc, x= "best", best.weights = c(3,0.3), input = "threshold")
 
 #m_2_bw_re -----------------
 
-test_data$Pred_m_2_bw_re <- ifelse(test_data$Prob_m_2_bw_re > 0.05,"0", "1")
+test_data$Pred_m_2_bw_re <- ifelse(test_data$Prob_m_2_bw_re < 0.003,"0", "1")
 test_data$Pred_m_2_bw_re <- as.factor(test_data$Pred_m_2_bw_re)
 confusionMatrix(data = test_data$Pred_m_2_bw_re, reference= test_data$Churn, positive = "1")
 
@@ -637,7 +650,7 @@ auc(test_data$Churn, test_data$Prob_m_2_bw_re)
 
 #m_3_bw_re ------------------
 
-test_data$Pred_m_3_bw_re <- ifelse(test_data$Prob_m_3_bw_re < 0.004,"0", "1")
+test_data$Pred_m_3_bw_re <- ifelse(test_data$Prob_m_3_bw_re < 0.003,"0", "1")
 test_data$Pred_m_3_bw_re <- as.factor(test_data$Pred_m_3_bw_re)
 confusionMatrix(data = test_data$Pred_m_3_bw_re, reference= test_data$Churn, positive = "1")
 
@@ -651,7 +664,7 @@ coords(roc_m_3_bw_re, x = "best", best.method = "c", input = "threshold")
 
 #m_3_fw_re ------------------
 
-test_data$Pred_m_3_fw_re <- ifelse(test_data$Prob_m_3_fw_re > 0.05,"0", "1")
+test_data$Pred_m_3_fw_re <- ifelse(test_data$Prob_m_3_fw_re < 0.003,"0", "1")
 test_data$Pred_m_3_fw_re <- as.factor(test_data$Pred_m_3_fw_re)
 confusionMatrix(data = test_data$Pred_m_3_fw_re, reference= test_data$Churn, positive = "1")
 
@@ -660,7 +673,7 @@ auc(test_data$Churn, test_data$Prob_m_3_fw_re)
 
 #m_3_bth_re ------------------
 
-test_data$Pred_m_3_bth_re <- ifelse(test_data$Prob_m_3_bth_re > 0.05,"0", "1")
+test_data$Pred_m_3_bth_re <- ifelse(test_data$Prob_m_3_bth_re < 0.003,"0", "1")
 test_data$Pred_m_3_bth_re <- as.factor(test_data$Pred_m_3_bth_re)
 confusionMatrix(data = test_data$Pred_m_3_bth_re, reference= test_data$Churn, positive = "1")
 
@@ -699,6 +712,9 @@ private_full_bw <- stepAIC(private_full, direction="backward", trace = T)
 summary(private_full_bw)
 
 vif(private_full_bw)
+library(DescTools)
+PseudoR2(private_full_bw, which = "all")
+hoslem.test(private_full_bw$y, fitted(private_full_bw, g=10))
 
 #Forward selection
 private_null <- glm(Churn ~ 1, data = train_data_private, family = binomial) #Null model
@@ -735,19 +751,9 @@ summary(private_null_fw_re)
 #Private_full_bw_re
 Prob_private_full_bw_re <- predict(private_full_bw_re, test_data_private, type="response")
 test_data_private$Prob_private_full_bw_re <- unlist(Prob_private_full_bw_re, use.names=FALSE)
-test_data_private$Pred_private_full_bw_re <- ifelse(test_data_private$Prob_private_full_bw_re < 0.005,"0", "1")
+test_data_private$Pred_private_full_bw_re <- ifelse(test_data_private$Prob_private_full_bw_re < 0.003,"0", "1")
 test_data_private$Pred_private_full_bw_re <- as.factor(test_data_private$Pred_private_full_bw_re)
 confusionMatrix(data = test_data_private$Pred_private_full_bw_re, reference= test_data_private$Churn, positive = "1")
 
   #Area under curve = 0.7427
 auc(test_data_private$Churn, test_data_private$Prob_private_full_bw_re)
-
-#Private_null_fw_re
-Prob_private_null_fw_re <- predict(private_null_fw_re, test_data_private, type="response")
-test_data_private$Prob_private_null_fw_re <- unlist(Prob_private_null_fw_re, use.names=FALSE)
-test_data_private$Pred_private_null_fw_re <- ifelse(test_data_private$Prob_private_null_fw_re < 0.05,"0", "1")
-test_data_private$Pred_private_null_fw_re <- as.factor(test_data_private$Pred_private_null_fw_re)
-confusionMatrix(data = test_data_private$Pred_private_null_fw_re, reference= test_data_private$Churn, positive = "1")
-
-  #Area under curve = 0.7427
-auc(test_data_private$Churn, test_data_private$Prob_private_null_fw_re)
