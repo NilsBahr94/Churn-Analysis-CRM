@@ -698,13 +698,27 @@ imp_data = imp_data[, .(Churn,
                 Customer_since_interval,
                 Contract_start_date_interval)]
 
+imp_data$Churn = as.factor(imp_data$Churn)
+imp_data$Client_type = as.numeric(as.character(imp_data$Client_type))
+imp_data$Bill_shock = as.numeric(as.character(imp_data$Bill_shock))
+imp_data$Online_account = as.numeric(as.character(imp_data$Online_account))
+imp_data$Opt_In_Mail = as.numeric(as.character(imp_data$Opt_In_Mail))
+imp_data$Opt_In_Post = as.numeric(as.character(imp_data$Opt_In_Post))
+imp_data$Opt_In_Tel = as.numeric(as.character(imp_data$Opt_In_Tel))
+imp_data$MA_Grundversorger = as.numeric(as.character(imp_data$MA_Grundversorger))
+imp_data$MA_Erweitert = as.numeric(as.character(imp_data$MA_Erweitert))
+imp_data$MA_Restlich = as.numeric(as.character(imp_data$MA_Restlich))
+imp_data$Recovered = as.numeric(as.character(imp_data$Recovered))
+imp_data$Continuous_relationship = as.numeric(as.character(imp_data$Continuous_relationship))
+imp_data$Age = as.numeric(as.character(imp_data$Age))
+
 data_rf = imp_data
 data_rf$Churn = as.factor(data_rf$Churn)
 
-apply(data_rf[Client_type == 0], 2, function(col)sum(is.na(col))/length(col))
+# apply(data_rf[Client_type == 0], 2, function(col)sum(is.na(col))/length(col))
 # Because for firms there are NA's in age, eliminate those from those dataset 
 data_rf_no_na = data_rf[Client_type == 0]
-apply(data_rf_no_na, 2, function(col)sum(is.na(col))/length(col))
+# apply(data_rf_no_na, 2, function(col)sum(is.na(col))/length(col))
 
 # Convert factor names of Churn to caret compatible format (1 and 0 are not allowed)
 data_rf_no_na$Churn = as.character(data_rf_no_na$Churn)
@@ -730,7 +744,7 @@ cv_rf <- trainControl(method = "cv", number = 5,
                               summaryFunction = twoClassSummary,
                               classProbs = TRUE,
                               allowParallel=TRUE,
-                              sampling = "rose") # Use Subsampling due to class imbalance
+                              sampling = "down") # Use Subsampling due to class imbalance
 
 
 # Define Hyperparameter Grid; changeable parameters: nrounds, max_depth, eta, gamma, colsample_bytree, min_child_weight, subsample
@@ -748,7 +762,7 @@ rf_model <- train(x= data_rf_train[, -1],
 rf_model
 plot(rf_model)
 rf_model_results = as.data.table(rf_model$results)
-rf_model_results$crm_eval = 3*rf_model_results$Sens + rf_model_results$Spec
+rf_model_results$crm_eval = 1.5*rf_model_results$Sens + rf_model_results$Spec
 max(rf_model_results$crm_eval)
 
 pred_rf = predict(rf_model, newdata = data_rf_test[,-1])
@@ -862,7 +876,7 @@ evalResults$xgb <- predict(xgb_tune,
 
 # list(metrics_down_grid_1, )
 
-# Create final grid with best results
+# XGBoost with determined grid -----------
 
 xgb_grid_specified <- expand.grid(nrounds = 150,
                                   max_depth = 3,
@@ -890,6 +904,37 @@ max(xgb_model_specified_results$crm_eval)
 View(xgb_model_specified_results)
 
 
+
+## XGBoost for Imputed Dataset ---------
+
+xgb_model_resampling_imputed = function(resampling_method, tune_grid){
+  xgb_model = 
+    train(x= as.matrix(data_rf_train[, -1]),
+          y= as.factor(data_rf_train$Churn),
+          method="xgbTree",
+          trControl=resampling_method,  #change between cv_ctrl_smote, cv_ctrl_down, cv_ctrl_up, cv_ctrl_rose 
+          tuneGrid=tune_grid,
+          verbose=T,
+          metric="ROC", # ROC
+          nthread =3)
+  return(xgb_model)
+}
+
+xgb_tune_imputed = xgb_model_resampling_imputed(resampling_method=cv_ctrl_down, tune_grid = xgb_grid2)
+
+xgb_tune_imputed
+
+# Predict with final model
+xgb_pred_imputed = predict(xgb_tune_imputed, newdata = data_rf_test[,-1])
+confusionMatrix(xgb_pred_imputed, data_rf_test$Churn)
+
+###  Model Predictions and Performance
+# Evaluate performance
+xgb_tune_results_imputed = as.data.table(xgb_tune_imputed$results)
+xgb_tune_results_imputed$crm_eval = 1.5*xgb_tune_results_imputed$Sens + xgb_tune_results_imputed$Spec
+max(xgb_tune_results_imputed$crm_eval)
+
+View(xgb_tune_results_imputed)
 
 # f) H2o ---------------------------------------------------------------------
 
