@@ -477,13 +477,15 @@ data = data[, .(Churn,
                 Contract_start_date_interval)]
 
 #Read csv files
-
-
+geo_at = fread("Data/Geo/geodaten_at.csv", na.strings = "NA", dec = ",")
+geo_ch = fread("Data/Geo/geodaten_ch.csv", na.strings = "NA", dec = ",")
+geo_de = fread("Data/Geo/geodaten_de.csv", na.strings = "NA", dec = ",")
+population_de = fread("Data/Geo/plz_einwohner.csv", na.strings = "NA", dec = ",")
+geo_data = left_join(geo_de, population_de, by = c("Plz"="plz"))
 
 #Join longtitude, lattitude, and population
-
-
-left_join(x, y, by = NULL)
+geo_data$Plz = as.character(geo_data$Plz)
+test = left_join(data, geo_data, by = c("Zip_code"="Plz"))
 
 
 # Convert features of the preparaed data into right format for modeling 
