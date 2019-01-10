@@ -236,11 +236,11 @@ data$Contract_start_date_interval = as.numeric(data$Contract_start_date_interval
 #However, only non-churners have this combination, therefore this new feature would not be meaningful
 
 #Create feature "international"
-data$`International` = unlist(gregexpr("[0-9]{5}", data$`Zip_code`)) # Nochmal überprüfen, kurze PLZ müssen nicht unbedingt im Ausland sein
+data$`International` = unlist(gregexpr("[0-9]{5}", data$`Zip_code`)) 
 data$`International`[data$`International` == 1] = 0
 data$`International`[data$`International` == -1] = 1
 
-data[ International == 1, .N, by = MA_Erweitert] # Auch checken, ob erweiterten Netzgebiet
+data[ International == 1, .N, by = MA_Erweitert] 
 data[ International == 1, .N, by = MA_Restlich] 
 
 #Create feature "annual payment"
@@ -249,6 +249,10 @@ data$`Actual_payment` = data$Payment_on_account * 12 + data$Annual_account
 #Create feature "Continuous relationship"
 data$`Continuous_relationship` = ifelse(data$Contract_start_date==data$Customer_since, 1,0)
 data$Continuous_relationship = as.factor(data$Continuous_relationship)
+
+# Insert NA for Outliers
+data$Age[data$Age >= 105] = NA 
+data$Age[data$Age < 18] = NA
 
 #Create feature "Digitally_savvy"
 # data$Digitally_savvy = ifelse(data$Online_account=="1" & data$Opt_In_Mail=="1" & data$Age <= 50, 1,0) # 81 cases und alle Nicht-Churner
@@ -433,9 +437,12 @@ p2 = data[Consumption <= 15000] %>% drop_na() %>%
   scale_color_tableau() +
   scale_fill_tableau()
 
+ggplot_data = data
+setnames(ggplot_data, "Customer_since_interval", "Duration_of_customer_relationship")
+
 # Consumption
-p3 = data %>% drop_na() %>%
-  ggplot(aes(x = Customer_since_interval, fill = Churn, color = Churn)) +
+p3 = ggplot_data %>% drop_na() %>%
+  ggplot(aes(x = Duration_of_customer_relationship, fill = Churn, color = Churn)) +
   geom_density(alpha = 0.5) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1),
         legend.position = "top") +
@@ -548,7 +555,7 @@ glm_tc = trainControl(method = "cv", number = 5,
                       summaryFunction = twoClassSummary,
                       classProbs = TRUE, # Super important!
                       verboseIter = FALSE,
-                      sampling = "down")
+                      sampling = "rose")
 
 # GLM Model only works when NA's are excluded
 train_data_ex_NA = na.omit(train_data)
@@ -571,18 +578,18 @@ glm_pred = predict(glm_model, newdata = test_data_ex_NA[,-1], type = 'raw')
 confusionMatrix(glm_pred, test_data_ex_NA$Churn)
 
 glm_model_results = as.data.table(glm_model$results)
-glm_model_results$crm_eval = 3*glm_model_results$Sens + glm_model_results$Spec
+glm_model_results$crm_eval = 1.5*glm_model_results$Sens + glm_model_results$Spec
 max(glm_model_results$crm_eval)
 
 # b) SVM -------------------
 
 # Data Preprocessing for SVM: scale data to [-1, 1]
 # Training Data
-scale_train_data = as.data.table(ReScaling(train_data[, 13:21], t.mn = 0, t.mx = 1)) # Scale continuous feature
+scale_train_data = as.data.table(ReScaling(train_data[, 13:23], t.mn = 0, t.mx = 1)) # Scale continuous feature
 scale_train_data = cbind(train_data[, 1:12], scale_train_data)
 
 # Test Data
-scale_test_data = as.data.table(ReScaling(test_data[, 13:21], t.mn = 0, t.mx = 1)) # Scale continuous feature
+scale_test_data = as.data.table(ReScaling(test_data[, 13:23], t.mn = 0, t.mx = 1)) # Scale continuous feature
 scale_test_data = cbind(test_data[, 1:12], scale_test_data)
 
 set.seed(743) 
@@ -610,7 +617,7 @@ svm_pred = predict(svm_model, newdata = scale_test_data[,-1])
 confusionMatrix(svm_pred, scale_test_data$Churn)
 
 svm_model_results = as.data.table(svm_model$results)
-svm_model_results$crm_eval = 3*svm_model_results$Sens + svm_model_results$Spec
+svm_model_results$crm_eval = 1.5*svm_model_results$Sens + svm_model_results$Spec
 max(svm_model_results$crm_eval)
 
 # c) Decision Tree -------------------
@@ -638,7 +645,7 @@ y_pred = predict(dt_model, newdata = test_data[,-1], type = 'raw')
 confusionMatrix(y_pred, test_data$Churn)
 
 dt_model_results = as.data.table(dt_model$results)
-dt_model_results$crm_eval = 3*dt_model_results$Sens + dt_model_results$Spec
+dt_model_results$crm_eval = 1.5*dt_model_results$Sens + dt_model_results$Spec
 max(dt_model_results$crm_eval)
 
 
@@ -690,7 +697,7 @@ imp_data$Contract_start_date_interval = as.numeric(imp_data$Contract_start_date_
 #However, only non-churners have this combination, therefore this new feature would not be meaningful
 
 #Create feature "international"
-imp_data$`International` = unlist(gregexpr("[0-9]{5}", imp_data$`Zip_code`)) # Nochmal überprüfen, kurze PLZ müssen nicht unbedingt im Ausland sein
+imp_data$`International` = unlist(gregexpr("[0-9]{5}", imp_data$`Zip_code`)) 
 imp_data$`International`[imp_data$`International` == 1] = 0
 imp_data$`International`[imp_data$`International` == -1] = 1
 
@@ -713,7 +720,8 @@ imp_data = imp_data[, .(Churn,
                 Online_account, 
                 Opt_In_Mail, 
                 Opt_In_Post, 
-                Opt_In_Tel, 
+                Opt_In_Tel,
+                Zip_code,
                 MA_Grundversorger,
                 MA_Erweitert,
                 MA_Restlich,
@@ -728,6 +736,31 @@ imp_data = imp_data[, .(Churn,
                 Minimum_contract_term, 
                 Customer_since_interval,
                 Contract_start_date_interval)]
+
+
+#Read csv files
+geo_at = fread("Data/Geo/geodaten_at.csv", na.strings = "NA", dec = ",")
+geo_ch = fread("Data/Geo/geodaten_ch.csv", na.strings = "NA", dec = ",")
+geo_de = fread("Data/Geo/geodaten_de.csv", na.strings = "NA", dec = ",")
+population_de = fread("Data/Geo/plz_einwohner.csv", na.strings = "NA", dec = ",")
+geo_data = left_join(geo_de, population_de, by = c("Plz"="plz"))
+
+#Join longtitude, lattitude, and population
+geo_data$Plz = as.character(geo_data$Plz)
+imp_dummy = left_join(imp_data, geo_data[,-2], by = c("Zip_code"="Plz"))
+imp_dummy$Inhabitants = NULL
+imp_dummy$Longitude.x = NULL
+imp_dummy$Longitude.y = NULL
+imp_dummy$Latitude.x = NULL
+imp_dummy$Latitude.y = NULL
+imp_dummy$Longitude = as.numeric(imp_dummy$Longitude)
+imp_dummy$Latitude = as.numeric(imp_dummy$Latitude)
+imp_dummy$einwohner = as.numeric(imp_dummy$einwohner)
+
+setnames(imp_dummy, "einwohner", "Inhabitants")
+imp_dummy$Zip_code = NULL
+
+imp_data = imp_dummy
 
 imp_data$Churn = as.factor(imp_data$Churn)
 imp_data$Client_type = as.numeric(as.character(imp_data$Client_type))
@@ -748,7 +781,8 @@ data_rf$Churn = as.factor(data_rf$Churn)
 
 # apply(data_rf[Client_type == 0], 2, function(col)sum(is.na(col))/length(col))
 # Because for firms there are NA's in age, eliminate those from those dataset 
-data_rf_no_na = data_rf[Client_type == 0]
+data_rf = as.data.table(data_rf)
+data_rf_no_na = data_rf[Client_type == 0,]
 # apply(data_rf_no_na, 2, function(col)sum(is.na(col))/length(col))
 
 # Convert factor names of Churn to caret compatible format (1 and 0 are not allowed)
@@ -761,6 +795,8 @@ data_rf_no_na$Churn = as.factor(data_rf_no_na$Churn)
 levels(data_rf_no_na$Churn)
 data_rf_no_na$Churn = factor(data_rf_no_na$Churn, levels = c("Yes", "No"))
 levels(data_rf_no_na$Churn)
+
+data_rf_no_na = na.omit(data_rf_no_na)
 
 # Do Training and Test Split for Random Forest
 
@@ -775,20 +811,25 @@ cv_rf <- trainControl(method = "cv", number = 5,
                               summaryFunction = twoClassSummary,
                               classProbs = TRUE,
                               allowParallel=TRUE,
-                              sampling = "down") # Use Subsampling due to class imbalance
+                              sampling = "up")
+                              # search = "random") # Use Subsampling due to class imbalance
 
 
-# Define Hyperparameter Grid; changeable parameters: nrounds, max_depth, eta, gamma, colsample_bytree, min_child_weight, subsample
-rf_grid <- expand.grid(mtry= c(10, 20, 25, 30, 35, 40, 50)) 
+# Define Hyperparameter Grid
+rf_grid <- expand.grid(mtry= c(1,2,3,4,5,6,7,8)) 
+rf_grid = expand.grid(mtry = c(10, 15, 18, 22),
+                      splitrule = "extratrees",
+                      min.node.size = c(5,10,16))
 
 # Train Model
 set.seed(45)
 rf_model <- train(x= data_rf_train[, -1],
                   y= as.factor(data_rf_train$Churn),
-                  method="rf",
+                  method="ranger",
                   trControl=cv_rf,
                   tuneGrid=rf_grid,
-                  metric="ROC")
+                  metric="ROC") 
+                  # tuneLength = 10)
 
 rf_model
 plot(rf_model)
@@ -818,28 +859,28 @@ cv_ctrl_down <- trainControl(method = "cv", number = 10,
                             sampling = "down") # Use Subsampling due to class imbalance
 
 # Up sampling
-cv_ctrl_up <- trainControl(method = "cv", number = 10,
+cv_ctrl_up <- trainControl(method = "cv", number = 5,
                              summaryFunction = twoClassSummary,
                              classProbs = TRUE,
                              allowParallel=TRUE,
                              sampling = "up") # Use Subsampling due to class imbalance
 
 # SMOTE
-cv_ctrl_smote <- trainControl(method = "cv", number = 10,
+cv_ctrl_smote <- trainControl(method = "cv", number = 5,
                               summaryFunction = twoClassSummary,
                               classProbs = TRUE,
                               allowParallel=TRUE,
                               sampling = "smote") # Use Subsampling due to class imbalance
 
 # ROSE
-cv_ctrl_rose <- trainControl(method = "cv", number = 10,
+cv_ctrl_rose <- trainControl(method = "cv", number = 5,
                               summaryFunction = twoClassSummary,
                               classProbs = TRUE,
                               allowParallel=TRUE,
                               sampling = "rose")
 
 # No resampling
-cv_ctrl_no <- trainControl(method = "cv", number = 10,
+cv_ctrl_no <- trainControl(method = "cv", number = 5,
                              summaryFunction = twoClassSummary,
                              classProbs = TRUE,
                              allowParallel=TRUE)
@@ -875,13 +916,14 @@ xgb_model_resampling = function(resampling_method, tune_grid){
         tuneGrid=tune_grid,
         verbose=T,
         metric="ROC", # ROC
-        nthread =3)
-  
+        nthread =3,
+        tuneLength = 30)
   return(xgb_model)
 }
 
 xgb_tune = xgb_model_resampling(resampling_method=cv_ctrl_down, tune_grid = xgb_grid1)
 xgb_tune
+
 
 # Predict with final model
 xgb_pred = predict(xgb_tune, newdata = xgb_test_data[,-1])
@@ -905,7 +947,16 @@ evalResults$xgb <- predict(xgb_tune,
 
 # list(metrics_down_grid_1, )
 
-# XGBoost with determined grid -----------
+# XGBoost Specified -----------
+
+(eta = 0.005,
+max_depth = 3.
+gamma = 0.0,
+colsample_bytree = 0.4,
+min_child_weight = 2,
+subsample = 1,
+nrounds = 100)
+
 
 xgb_grid_specified <- expand.grid(nrounds = 50,
                                   max_depth = 3,
@@ -915,6 +966,15 @@ xgb_grid_specified <- expand.grid(nrounds = 50,
                                   min_child_weight = 1,
                                   subsample = 1)
 
+xgb_grid_specified = expand.grid(eta = 0.005,
+                                  max_depth = 3,
+                                  gamma = 0.0,
+                                  colsample_bytree = 0.4,
+                                  min_child_weight = 2,
+                                  subsample = 1,
+                                  nrounds = 100)
+
+set.seed(231)
 xgb_model_specified = 
   train(x= as.matrix(xgb_train_data[, -1]),
         y= as.factor(xgb_train_data$Churn),
@@ -1050,8 +1110,6 @@ plot(perf)
 
 # Metrics Overview
 metrics <- as.data.table(h2o.metric(perf))
-# metrics$crm_eval_correct = 3*(metrics$tns/(metrics$tns+metrics$fps))+(metrics$tps)/(metrics$tps+metrics$fns) # max 1. 3.094811
-max(metrics$crm_eval_correct)
 metrics$crm_eval_final = 1.5*metrics$recall + metrics$specificity  
 max(metrics$crm_eval_final)
 View(metrics) 
@@ -1524,7 +1582,7 @@ data_2018$Contract_start_date_interval = as.numeric(data_2018$Contract_start_dat
 
 # Feature Engineering 
 #Create feature "international"
-data_2018$`International` = unlist(gregexpr("[0-9]{5}", data_2018$`Zip_code`)) # Nochmal überprüfen, kurze PLZ müssen nicht unbedingt im Ausland sein
+data_2018$`International` = unlist(gregexpr("[0-9]{5}", data_2018$`Zip_code`)) 
 data_2018$`International`[data_2018$`International` == 1] = 0
 data_2018$`International`[data_2018$`International` == -1] = 1
 
@@ -1607,6 +1665,10 @@ data_2018$Continuous_relationship = as.numeric(as.character(data_2018$Continuous
 data_2018$Age = as.numeric(as.character(data_2018$Age))
 # data_2018$Duration_of_customer_relationship = as.numeric(as.character(data_2018$Duration_of_customer_relationship))
 
+data_2018$Customer_since_interval = ifelse(data_2018$Customer_since_interval < 23, 0, data_2018$Customer_since_interval-22)
+data_2018$Contract_start_date_interval = ifelse(data_2018$Contract_start_date_interval < 23, 0, data_2018$Contract_start_date_interval-22)
+
+
 str(data_2018)
 
 # Predict 2018 Data -------
@@ -1617,7 +1679,7 @@ data_2018_predicted = as.data.table(data_2018_predicted)
 
 data_2018_predicted[, .N, by = Churn]
 
-write.csv(data_2018_predicted, "Data/Data_Nov_2018_predicted_v1.csv")
+write.csv(data_2018_predicted, "Data/Data_Nov_2018_predicted_v2.csv")
 
 
 # Deprecated --------------------------------------------------------------
