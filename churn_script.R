@@ -104,18 +104,17 @@ library(h2o)
 
 # Import 2017 Data -------------------------------------------------------------
 
-
-# data_2017 = read_excel("Data/Data January 2017.xlsx", na = "-", col_types = c("text","guess","guess","text","guess","guess","guess","guess","guess","guess","guess","numeric","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess"))
-# write.csv2(data_2017, "Data/Data_January_2017_3.csv")
+data_2017 = read_excel("Data/Data January 2017.xlsx", na = "-", col_types = c("text","guess","guess","text","guess","guess","guess","guess","guess","guess","guess","numeric","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess"))
+write.csv2(data_2017, "Data/Data_January_2017_4.csv")
 
 # Imputed
 original_data = fread("Data/Data_January_2017_3_imputed.csv", na.strings = "NA", dec = ",")
 
 # Mac
-original_data = fread("Data/Data_January_2017_3.csv", na.strings = "NA", dec = ",")
+original_data = fread("Data/Data_January_2017_4.csv", na.strings = "NA", dec = ",")
 
 # Windows
-original_data = fread("Data\\Data_January_2017_3.csv", na.strings = "NA", dec = ",")
+original_data = fread("Data\\Data_January_2017_4.csv", na.strings = "NA", dec = ",")
 
 data = original_data
 
@@ -478,13 +477,20 @@ geo_data = left_join(geo_de, population_de, by = c("Plz"="plz"))
 
 #Join longtitude, lattitude, and population
 geo_data$Plz = as.character(geo_data$Plz)
-data = left_join(data, geo_data[,-2], by = c("Zip_code"="Plz"))
-data$Longitude = is.numeric(data$Longitude)
-data$Latitude = is.numeric(data$Latitude)
-setnames(data, "einwohner", "Inhabitants")
-data$Inhabitants = is.numeric(data$Inhabitants)
+test = left_join(data, geo_data[,-2], by = c("Zip_code"="Plz"))
+test$Inhabitants = NULL
+test$Longitude.x = NULL
+test$Longitude.y = NULL
+test$Latitude.x = NULL
+test$Latitude.y = NULL
+test$Longitude = as.numeric(test$Longitude)
+test$Latitude = as.numeric(test$Latitude)
+test$einwohner = as.numeric(test$einwohner)
 
-str(data)
+setnames(test, "einwohner", "Inhabitants")
+test$Zip_code = NULL
+
+data = test
 
 # Convert features of the preparaed data into right format for modeling 
 data$Churn = as.factor(data$Churn)
@@ -517,15 +523,15 @@ train_data <- data[split1,]
 test_data  <- data[-split1,]
 
 # 2) Training, validation, test set
-set.seed(365)
-split1 <- createDataPartition(data$Churn, p=.6, list=FALSE)
-train_data <- data[split1,]
-other  <- data[-split1,]
-
-set.seed(234)
-split2 <- createDataPartition(other$Churn, p=.5, list=FALSE)
-eval_data = other[split2,]
-test_data = other[-split2,]
+# set.seed(365)
+# split1 <- createDataPartition(data$Churn, p=.6, list=FALSE)
+# train_data <- data[split1,]
+# other  <- data[-split1,]
+# 
+# set.seed(234)
+# split2 <- createDataPartition(other$Churn, p=.5, list=FALSE)
+# eval_data = other[split2,]
+# test_data = other[-split2,]
 
 # Extensive Modeling --------------------------------------------------------
 
@@ -799,12 +805,9 @@ xgb_train_data = train_data
 # xgb_eval_data = eval_data
 xgb_test_data = test_data
 
-nrow(xgb_train_data)
-xgb_train_data[,.N, by = Churn]
-# nrow(xgb_eval_data)
-# xgb_eval_data[,.N, by = Churn]
-nrow(xgb_test_data)
-xgb_test_data[,.N, by = Churn]
+summary(xgb_train_data$Churn)
+summary(xgb_test_data$Churn)
+
 
 # Different forms of resampling to deal with unbalanced classes 
 # Down sampling
@@ -873,6 +876,7 @@ xgb_model_resampling = function(resampling_method, tune_grid){
         verbose=T,
         metric="ROC", # ROC
         nthread =3)
+  
   return(xgb_model)
 }
 
@@ -903,9 +907,9 @@ evalResults$xgb <- predict(xgb_tune,
 
 # XGBoost with determined grid -----------
 
-xgb_grid_specified <- expand.grid(nrounds = 150,
+xgb_grid_specified <- expand.grid(nrounds = 50,
                                   max_depth = 3,
-                                  eta = 0.0001,
+                                  eta = 0.050,
                                   gamma = 0,
                                   colsample_bytree = 0.4,
                                   min_child_weight = 1,
@@ -928,6 +932,10 @@ max(xgb_model_specified_results$crm_eval)
 
 View(xgb_model_specified_results)
 
+# Predict with specific XGBoost model
+
+xgb_pred_specified = predict(xgb_model_specified, newdata = xgb_test_data[,-1])
+confusionMatrix(xgb_pred_specified, xgb_test_data$Churn)
 
 
 ## XGBoost for Imputed Dataset ---------
@@ -1548,6 +1556,7 @@ data_2018 = data_2018[, .(Client_type,
                       MA_Grundversorger,
                       MA_Erweitert,
                       MA_Restlich,
+                      Zip_code,
                       Recovered, 
                       Continuous_relationship, 
                       Age, 
@@ -1558,6 +1567,30 @@ data_2018 = data_2018[, .(Client_type,
                       Minimum_contract_term, 
                       Customer_since_interval,
                       Contract_start_date_interval)]
+
+#Read csv files
+geo_at = fread("Data/Geo/geodaten_at.csv", na.strings = "NA", dec = ",")
+geo_ch = fread("Data/Geo/geodaten_ch.csv", na.strings = "NA", dec = ",")
+geo_de = fread("Data/Geo/geodaten_de.csv", na.strings = "NA", dec = ",")
+population_de = fread("Data/Geo/plz_einwohner.csv", na.strings = "NA", dec = ",")
+geo_data = left_join(geo_de, population_de, by = c("Plz"="plz"))
+
+#Join longtitude, lattitude, and population
+geo_data$Plz = as.character(geo_data$Plz)
+dummy_2018 = left_join(data_2018, geo_data[,-2], by = c("Zip_code"="Plz"))
+dummy_2018$Inhabitants = NULL
+test$Longitude.x = NULL
+dummy_2018$Longitude.y = NULL
+dummy_2018$Latitude.x = NULL
+dummy_2018$Latitude.y = NULL
+dummy_2018$Longitude = as.numeric(dummy_2018$Longitude)
+dummy_2018$Latitude = as.numeric(dummy_2018$Latitude)
+dummy_2018$einwohner = as.numeric(dummy_2018$einwohner)
+
+setnames(dummy_2018, "einwohner", "Inhabitants")
+dummy_2018$Zip_code = NULL
+
+data_2018 = dummy_2018
 
 # Convert features of the preparaed data into right format for modeling 
 data_2018$Client_type = as.numeric(as.character(data_2018$Client_type))
@@ -1580,6 +1613,7 @@ str(data_2018)
 
 data_2018_predicted = data_2018
 data_2018_predicted$Churn = predict(xgb_model_specified, newdata = data_2018)
+data_2018_predicted = as.data.table(data_2018_predicted)
 
 data_2018_predicted[, .N, by = Churn]
 
