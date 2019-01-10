@@ -108,17 +108,16 @@ library(h2o)
 # data_2017 = read_excel("Data/Data January 2017.xlsx", na = "-", col_types = c("text","guess","guess","text","guess","guess","guess","guess","guess","guess","guess","numeric","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess"))
 # write.csv2(data_2017, "Data/Data_January_2017_3.csv")
 
+# Imputed
+original_data = fread("Data/Data_January_2017_3_imputed.csv", na.strings = "NA", dec = ",")
 
-<<<<<<< HEAD
-# L
-data = fread("Data/Data_January_2017_3_imputed.csv", na.strings = "NA", dec = ",")
-=======
 # Mac
-data = fread("Data/Data_January_2017_3.csv", na.strings = "NA", dec = ",")
->>>>>>> 125c225c43f5ee7af242056d6b61823807676e8d
+original_data = fread("Data/Data_January_2017_3.csv", na.strings = "NA", dec = ",")
 
 # Windows
-data = fread("Data\\Data_January_2017_3.csv", na.strings = "NA", dec = ",")
+original_data = fread("Data\\Data_January_2017_3.csv", na.strings = "NA", dec = ",")
+
+data = original_data
 
 #remove title and V1 from the data set
 data = data[,c("Contract_ID", 
@@ -459,6 +458,7 @@ data = data[, .(Churn,
                 MA_Erweitert,
                 MA_Restlich,
                 Recovered, 
+                Zip_code,
                 Continuous_relationship, 
                 Age, 
                 Consumption, 
