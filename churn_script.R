@@ -1187,7 +1187,7 @@ cluster_ds = data_cl[,.(Bill_shock,
                                  Latitude,
                                  Inhabitants)]
 
-#Transform to numeric features
+#Transform to numeric features because they are required for the application of the algorithm
 cluster_ds$Bill_shock = as.numeric(cluster_ds$Bill_shock)
 cluster_ds$Online_account = as.numeric(cluster_ds$Online_account)
 cluster_ds$Opt_In_Mail = as.numeric(cluster_ds$Opt_In_Mail)
@@ -1209,24 +1209,19 @@ cluster_ds$Longitude = as.numeric(cluster_ds$Longitude)
 cluster_ds$Latitude = as.numeric(cluster_ds$Latitude)
 cluster_ds$Inhabitants = as.numeric(cluster_ds$Inhabitants)
 
-#HDBSCAN cannot deal with NAs. 
+#The clustering algorithm HDBSCAN cannot deal with NAs. 
 #Therefore in case of any NA values in the dataframe those gaps are filled with results of the multiple imputation method
 if(anyNA(cluster_ds)){
   imp_data = mice(cluster_ds)
   cluster_ds <- complete(imp_data)
 }
-cluster_ds = merke
-
-cluster_ds = cluster_ds[which(cluster_ds$DBII>14.425),]
 
 #Scale values for clustering algorithm
 scaled_ds <- scale(cluster_ds)
 
 #Get clusters with minimum cluster size of 1.5% of the selected churners
 hdb <- hdbscan(scaled_ds, minPts = round(nrow(cluster_ds)*0.015))
-hdb$cluster_scores
 plot(hdb, show_flat = TRUE)
-length(which(hdb$cluster==0))
 
 #Visualizing clusters in tsne transformed data for minPts verification
 set.seed(30)  
@@ -1249,7 +1244,7 @@ ggplot(d_tsne_1, aes_string(x="V1", y="V2", color="cl_hdbscan")) +
 #Add assigned clusters to input data
 cs_result = as.data.table(cbind(cluster_ds, "Cluster" = as.character(hdb$cluster)))
 
-#Visualized feature distribution with assigned clusters
+#Visualize feature distribution with assigned clusters and boxplots for continuous features including boxplot stats
 #Continuous variables
 cs_result[,.(Consumption, 
         Annual_account, 
@@ -1305,7 +1300,10 @@ ggplot(cs_result[which(cs_result$Cluster!=0),], aes(x=Cluster, y=Inhabitants)) +
   geom_boxplot()+
   ggtitle("Boxplot Inhabitants")
 
-boxplot.stats(cs_result[which(cs_result$Cluster==1)]$Inhabitants)
+stat=data.frame("Min" = double,"Q1"= double,"Median"= double,"Q3"= double,"Max"= double)
+for (i in c(1:8)){
+  stat = rbind(stat,boxplot.stats(cs_result[which(cs_result$Cluster==i)]$Inhabitants)$stats)
+}
 
 #Longitude
 cs_result[Longitude > 47 & Longitude <= 49 ] %>% drop_na() %>%
@@ -1320,8 +1318,10 @@ ggplot(cs_result[which(cs_result$Cluster!=0),], aes(x=Cluster, y=Longitude)) +
   geom_boxplot()+
   ggtitle("Boxplot Longitude")
 
-boxplot.stats(cs_result[which(cs_result$Cluster==1)]$Longitude)
-boxplot.stats(cs_result[which(cs_result$Cluster==2)]$Longitude)
+stat=data.frame("Min" = double,"Q1"= double,"Median"= double,"Q3"= double,"Max"= double)
+for (i in c(1:8)){
+  stat = rbind(stat,boxplot.stats(cs_result[which(cs_result$Cluster==i)]$Longitude)$stats)
+}
 
 #latitude
 cs_result[Latitude > 7 & Latitude <= 9 ] %>% drop_na() %>%
@@ -1336,8 +1336,10 @@ ggplot(cs_result[which(cs_result$Cluster!=0),], aes(x=Cluster, y=Latitude)) +
   geom_boxplot()+
   ggtitle("Boxplot Latitude")
 
-boxplot.stats(cs_result[which(cs_result$Cluster==1)]$Latitude)
-boxplot.stats(cs_result[which(cs_result$Cluster==2)]$Latitude)
+stat=data.frame("Min" = double,"Q1"= double,"Median"= double,"Q3"= double,"Max"= double)
+for (i in c(1:8)){
+  stat = rbind(stat,boxplot.stats(cs_result[which(cs_result$Cluster==i)]$Latitude)$stats)
+}
 
 #Annual Account
 cs_result[Annual_account > -150 & Annual_account <= 400 ] %>% drop_na() %>%
@@ -1352,8 +1354,10 @@ ggplot(cs_result[which(cs_result$Cluster!=0),], aes(x=Cluster, y=Annual_account)
   geom_boxplot()+
   ggtitle("Boxplot Annual_account")
 
-boxplot.stats(cs_result[which(cs_result$Cluster==1)]$Annual_account)
-boxplot.stats(cs_result[which(cs_result$Cluster==2)]$Annual_account)
+stat=data.frame("Min" = double,"Q1"= double,"Median"= double,"Q3"= double,"Max"= double)
+for (i in c(1:8)){
+  stat = rbind(stat,boxplot.stats(cs_result[which(cs_result$Cluster==i)]$Annual_account)$stats)
+}
 
 #Age
 cs_result[Age > 0 & Age < 100 ] %>% drop_na() %>%
@@ -1368,8 +1372,10 @@ ggplot(cs_result[which(cs_result$Cluster!=0),], aes(x=Cluster, y=Age)) +
   geom_boxplot()+
   ggtitle("Boxplot Age")
 
-boxplot.stats(cs_result[which(cs_result$Cluster==1)]$Age)
-boxplot.stats(cs_result[which(cs_result$Cluster==2)]$Age)
+stat=data.frame("Min" = double,"Q1"= double,"Median"= double,"Q3"= double,"Max"= double)
+for (i in c(1:8)){
+  stat = rbind(stat,boxplot.stats(cs_result[which(cs_result$Cluster==i)]$Age)$stats)
+}
 
 #DBII
 cs_result[DBII > 0 & DBII <= 30 ] %>% drop_na() %>%
@@ -1384,8 +1390,10 @@ ggplot(cs_result[which(cs_result$Cluster!=0),], aes(x=Cluster, y=DBII)) +
   geom_boxplot()+
   ggtitle("Boxplot DBII")
 
-boxplot.stats(cs_result[which(cs_result$Cluster==1)]$DBII)
-boxplot.stats(cs_result[which(cs_result$Cluster==2)]$DBII)
+stat=data.frame("Min" = double,"Q1"= double,"Median"= double,"Q3"= double,"Max"= double)
+for (i in c(1:8)){
+  stat = rbind(stat,boxplot.stats(cs_result[which(cs_result$Cluster==i)]$DBII)$stats)
+}
 
 #Consumption
 cs_result[Consumption > 0 & Consumption <= 7500 ] %>% drop_na() %>%
@@ -1400,9 +1408,10 @@ ggplot(cs_result[which(cs_result$Cluster!=0),], aes(x=Cluster, y=Consumption)) +
   geom_boxplot()+
   ggtitle("Boxplot Consumption")
 
-boxplot.stats(cs_result[which(cs_result$Cluster==1)]$Consumption)
-boxplot.stats(cs_result[which(cs_result$Cluster==2)]$Consumption)
-
+stat=data.frame("Min" = double,"Q1"= double,"Median"= double,"Q3"= double,"Max"= double)
+for (i in c(1:8)){
+  stat = rbind(stat,boxplot.stats(cs_result[which(cs_result$Cluster==i)]$Consumption)$stats)
+}
 
 #Customer_since_interval
 cs_result[Customer_since_interval > 0 & Customer_since_interval <= 200 ] %>% drop_na() %>%
@@ -1417,8 +1426,10 @@ ggplot(cs_result[which(cs_result$Cluster!=0),], aes(x=Cluster, y=Customer_since_
   geom_boxplot()+
   ggtitle("Boxplot Customer_since_interval")
 
-boxplot.stats(cs_result[which(cs_result$Cluster==1)]$Customer_since_interval)
-boxplot.stats(cs_result[which(cs_result$Cluster==2)]$Customer_since_interval)
+stat=data.frame("Min" = double,"Q1"= double,"Median"= double,"Q3"= double,"Max"= double)
+for (i in c(1:8)){
+  stat = rbind(stat,boxplot.stats(cs_result[which(cs_result$Cluster==i)]$Customer_since_interval)$stats)
+}
 
 #Contract_start_date_interval
 cs_result[Contract_start_date_interval > 0 & Contract_start_date_interval <= 100 ] %>% drop_na() %>%
@@ -1433,10 +1444,26 @@ ggplot(cs_result[which(cs_result$Cluster!=0),], aes(x=Cluster, y=Contract_start_
   geom_boxplot()+
   ggtitle("Boxplot Contract_start_date_interval")
 
-boxplot.stats(cs_result[which(cs_result$Cluster==1)]$Contract_start_date_interval)
-boxplot.stats(cs_result[which(cs_result$Cluster==2)]$Contract_start_date_interval)
+stat=data.frame("Min" = double,"Q1"= double,"Median"= double,"Q3"= double,"Max"= double)
+for (i in c(1:8)){
+  stat = rbind(stat,boxplot.stats(cs_result[which(cs_result$Cluster==i)]$Contract_start_date_interval)$stats)
+}
 
-#write.csv2(cs_result, "Data\\cluster_high_DBII.csv")
+#write.csv2(cs_result, "Data\\results_of_clustering.csv")
+
+# Export results ----------------------------------------------------------------
+
+nov = fread("Data/Data_November_2018.csv", na.strings = "NA", dec = ",")
+pred_with_contract_ID = cbind("ContractID"=nov$Contract_ID,data_cl)
+non_churners = pred_with_contract_ID[which(data_cl$Churn=="No"),]
+contractID_churners = pred_with_contract_ID[which(data_cl$Churn=="Yes"),]
+cluster_result_csv = fread("Data/cluster_all_DBII.csv", na.strings = "NA", dec = ",")
+churners_with_clusters = cbind(contractID_churners,"Cluster" = cluster_result_csv$Cluster)
+non_churners$Cluster = -1
+final_result = rbind(churners_with_clusters,non_churners)
+
+#write.csv2(final_result, "Data\\customers_with_churn_prediction_and_clusters.csv")
+
 
 # Import 2018 Data ----------------------------------------------------------------
 
