@@ -1219,8 +1219,22 @@ if(anyNA(cluster_ds)){
 #Scale values for clustering algorithm
 scaled_ds <- scale(cluster_ds)
 
+#Calculate validation metrics and stats for different parameters
+parameter_comparison <- data.frame("Percentage" = double(),minPts=int(),"Dunn"=double(),"Entropy"=double(),"Avg. silwidth"=double(), "Cluster"=int())
+for (j in c(0.01,0.015,0.02,0.025,0.03,0.035,0.04,0.045,0.05)){
+  hdb <- hdbscan(scaled_ds, minPts = round(nrow(cluster_ds))*j)
+  stat = cluster.stats(dist(scaled_ds),hdb$cluster)
+  parameter_comparison = rbind(parameter_comparison,data.frame("Percentage"=j,"minPts"=round(nrow(cluster_ds))*j,"Dunn"=stat$dunn,"Entropy"=stat$entropy,"Avg. silwidth"=stat$avg.silwidth,"Cluster"=max(unique(hdb$cluster))))
+}
+
+#Analyse indicators and select minPts based on results
+parameter_comparison
+
 #Get clusters with minimum cluster size of 1.5% of the selected churners
 hdb <- hdbscan(scaled_ds, minPts = round(nrow(cluster_ds)*0.015))
+stat = cluster.stats(dist(scaled_ds),hdb$cluster)
+parameter_comparison = rbind(parameter_comparison,data.frame("Percentage"=j,"minPts"=round(nrow(cluster_ds))*j,"Dunn"=stat$dunn,"Entropy"=stat$entropy,"Avg. silwidth"=stat$avg.silwidth))
+
 plot(hdb, show_flat = TRUE)
 
 #Visualizing clusters in tsne transformed data for minPts verification
