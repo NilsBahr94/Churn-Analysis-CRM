@@ -1133,7 +1133,7 @@ metrics %>%
 # Cluster Analysis --------------------------------------------------------
 
 # Read predicted values for November 2018
-data_cl = fread("Data/Data_Nov_2018_predicted_v1.csv", na.strings = "NA", dec = ",")
+data_cl = fread("Data/Data_Nov_2018_predicted_v2.csv", na.strings = "NA", dec = ",")
 
 #Select all features for customer segmentation and adjust the order
 data_cl = data_cl[, .(Churn, 
@@ -1215,18 +1215,18 @@ if(anyNA(cluster_ds)){
   imp_data = mice(cluster_ds)
   cluster_ds <- complete(imp_data)
 }
-merke = cluster_ds
+cluster_ds = merke
 
-cluster_ds = cluster_ds[which(cluster_ds$DBII<8.351),]
+cluster_ds = cluster_ds[which(cluster_ds$DBII>14.425),]
 
 #Scale values for clustering algorithm
 scaled_ds <- scale(cluster_ds)
 
-#Get clusters with minimum cluster size of 5% of the selected churners
-hdb <- hdbscan(scaled_ds, minPts = round(nrow(cluster_ds)*0.05))
+#Get clusters with minimum cluster size of 1.5% of the selected churners
+hdb <- hdbscan(scaled_ds, minPts = round(nrow(cluster_ds)*0.015))
 hdb$cluster_scores
 plot(hdb, show_flat = TRUE)
-length(which(hdb$cluster==2))
+length(which(hdb$cluster==0))
 
 #Visualizing clusters in tsne transformed data for minPts verification
 set.seed(30)  
@@ -1306,7 +1306,6 @@ ggplot(cs_result[which(cs_result$Cluster!=0),], aes(x=Cluster, y=Inhabitants)) +
   ggtitle("Boxplot Inhabitants")
 
 boxplot.stats(cs_result[which(cs_result$Cluster==1)]$Inhabitants)
-boxplot.stats(cs_result[which(cs_result$Cluster==2)]$Inhabitants)
 
 #Longitude
 cs_result[Longitude > 47 & Longitude <= 49 ] %>% drop_na() %>%
@@ -1372,9 +1371,6 @@ ggplot(cs_result[which(cs_result$Cluster!=0),], aes(x=Cluster, y=Age)) +
 boxplot.stats(cs_result[which(cs_result$Cluster==1)]$Age)
 boxplot.stats(cs_result[which(cs_result$Cluster==2)]$Age)
 
-mean(cs_result[which(cs_result$Cluster==1)]$Age)
-mean(cs_result[which(cs_result$Cluster==2)]$Age)
-
 #DBII
 cs_result[DBII > 0 & DBII <= 30 ] %>% drop_na() %>%
   ggplot(aes(x = DBII, fill = Cluster, color = Cluster)) +
@@ -1391,9 +1387,6 @@ ggplot(cs_result[which(cs_result$Cluster!=0),], aes(x=Cluster, y=DBII)) +
 boxplot.stats(cs_result[which(cs_result$Cluster==1)]$DBII)
 boxplot.stats(cs_result[which(cs_result$Cluster==2)]$DBII)
 
-mean(cs_result[which(cs_result$Cluster==1)]$DBII)
-mean(cs_result[which(cs_result$Cluster==2)]$DBII)
-
 #Consumption
 cs_result[Consumption > 0 & Consumption <= 7500 ] %>% drop_na() %>%
   ggplot(aes(x = Consumption, fill = Cluster, color = Cluster)) +
@@ -1409,9 +1402,6 @@ ggplot(cs_result[which(cs_result$Cluster!=0),], aes(x=Cluster, y=Consumption)) +
 
 boxplot.stats(cs_result[which(cs_result$Cluster==1)]$Consumption)
 boxplot.stats(cs_result[which(cs_result$Cluster==2)]$Consumption)
-
-mean(cs_result[which(cs_result$Cluster==1)]$Consumption)
-mean(cs_result[which(cs_result$Cluster==2)]$Consumption)
 
 
 #Customer_since_interval
@@ -1430,9 +1420,6 @@ ggplot(cs_result[which(cs_result$Cluster!=0),], aes(x=Cluster, y=Customer_since_
 boxplot.stats(cs_result[which(cs_result$Cluster==1)]$Customer_since_interval)
 boxplot.stats(cs_result[which(cs_result$Cluster==2)]$Customer_since_interval)
 
-mean(cs_result[which(cs_result$Cluster==1)]$Customer_since_interval)
-mean(cs_result[which(cs_result$Cluster==2)]$Customer_since_interval)
-
 #Contract_start_date_interval
 cs_result[Contract_start_date_interval > 0 & Contract_start_date_interval <= 100 ] %>% drop_na() %>%
   ggplot(aes(x = Contract_start_date_interval, fill = Cluster, color = Cluster)) +
@@ -1449,7 +1436,7 @@ ggplot(cs_result[which(cs_result$Cluster!=0),], aes(x=Cluster, y=Contract_start_
 boxplot.stats(cs_result[which(cs_result$Cluster==1)]$Contract_start_date_interval)
 boxplot.stats(cs_result[which(cs_result$Cluster==2)]$Contract_start_date_interval)
 
-
+#write.csv2(cs_result, "Data\\cluster_high_DBII.csv")
 
 # Import 2018 Data ----------------------------------------------------------------
 
