@@ -166,10 +166,7 @@ names(data)[names(data) == 'Market area'] <- 'Market_area'
 
 # Data Preparation --------------------------------------------------------
   
-<<<<<<< HEAD
-=======
-#data$Consumption = data$Consumption/100000000000000  
->>>>>>> 3f0cc34f28e38e89ced6271efcfe1869ea4b48d7
+
 # Online Account - NA to 0 
 data$Online_account[is.na(data$Online_account)] = 0
 
