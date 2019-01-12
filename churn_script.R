@@ -163,7 +163,6 @@ names(data)[names(data) == 'Market area'] <- 'Market_area'
 
 # Data Preparation --------------------------------------------------------
   
-  #data$Consumption = data$Consumption/100000000000000  
 # Online Account - NA to 0 
 data$Online_account[is.na(data$Online_account)] = 0
 
@@ -255,9 +254,9 @@ data$Age[data$Age >= 105] = NA
 data$Age[data$Age < 18] = NA
 
 #Create feature "Digitally_savvy"
-# data$Digitally_savvy = ifelse(data$Online_account=="1" & data$Opt_In_Mail=="1" & data$Age <= 50, 1,0) # 81 cases und alle Nicht-Churner
+# data$Digitally_savvy = ifelse(data$Online_account=="1" & data$Opt_In_Mail=="1" & data$Age <= 50, 1,0) 
 # data$Digitally_savvy = as.factor(data$Digitally_savvy)
-# data[Online_account == "1" & Opt_In_Mail == "1", .N, by = Churn] # Ebenfalls alle nicht Churner, wenn Age rausgenommen
+# data[Online_account == "1" & Opt_In_Mail == "1", .N, by = Churn] 
 
 # Imputation  --------------------------------------------------------------
 
@@ -292,7 +291,6 @@ data[Age >= 105, .N, by = Churn] # 14 Customers are 105 years old or older
 # Customers younger than 18 years
 data[Age < 18, .N, by = Churn] # 9 Customers are younger than 18 years 
 
-
 ## Consumption
 plot(data[, Consumption])
 summary(data[, Consumption])
@@ -314,16 +312,10 @@ plot(data[, Actual_payment])
 # Very high Payment
 plot(data[Actual_payment <= 6000000, Actual_payment])
 data[Actual_payment > 1000000, .N]
-# data[Actual_payment > 1000000000] # Actual Payment is too high, this must be a fault. Annual_Account is also that high
-# data[Actual_payment > 1000000000, .N]
-# data[Contract_ID == "3018420", .N]
 
 # Very low Payments
 data[Actual_payment < -100000] # does that make sense?
 data[Actual_payment < -100000, .N, by = Churn] 
-
-# Filter out observation with unreasonably high and low Actual Payment
-# data = data[Actual_payment < 10000000000 & Actual_payment > -100000]
 
 ## Annual Account
 plot(data[, Annual_account]) # Same picture as for Annual Payment
@@ -359,10 +351,10 @@ ggpairs(data[, 11:21]) + theme(
 
 # Correlation Plot
 corrplot.mixed(corr=cor(data[, .(Age, 
-                                 Duration_of_customer_relationship, 
+                                 # Duration_of_customer_relationship, 
                                  Notice_period,
                                  Consumption, 
-                                 Payment_on_account,
+                                 # Payment_on_account,
                                  Annual_account, 
                                  DBII, 
                                  Minimum_contract_term, 
@@ -382,7 +374,7 @@ data[, .(Client_type,
          Opt_In_Mail, 
          Opt_In_Post, 
          Opt_In_Tel, 
-         Market_Area, 
+         # Market_Area, 
          Recovered, 
          Continuous_relationship, 
          Churn)] %>% drop_na() %>%
@@ -475,6 +467,7 @@ data = data[, .(Churn,
                 Customer_since_interval,
                 Contract_start_date_interval)]
 
+# Join population and longitude, latitude information with the dataset
 #Read csv files
 geo_at = fread("Data/Geo/geodaten_at.csv", na.strings = "NA", dec = ",")
 geo_ch = fread("Data/Geo/geodaten_ch.csv", na.strings = "NA", dec = ",")
@@ -513,17 +506,17 @@ data$MA_Restlich = as.numeric(as.character(data$MA_Restlich))
 data$Recovered = as.numeric(as.character(data$Recovered))
 data$Continuous_relationship = as.numeric(as.character(data$Continuous_relationship))
 data$Age = as.numeric(as.character(data$Age))
-# data$Duration_of_customer_relationship = as.numeric(as.character(data$Duration_of_customer_relationship))
+
 
 str(data)
 
-# Change order of factor levels such that "Yes" is interpreted as positive and "No" is interpreted as negative 
+# Change order of factor levels such that "Yes" is interpreted as positive and "No" is interpreted as negative so that the confusion matrix displays the right classes
 levels(data$Churn)
 data$Churn = factor(data$Churn, levels = c("Yes", "No"))
 levels(data$Churn)
 
 # Do *one* of the next two approaches
-# 1) Create training, validation and test set
+# 1) Create training and test set
 set.seed(156)
 split1 <- createDataPartition(data$Churn, p=.7, list=FALSE)
 train_data <- data[split1,]
@@ -542,20 +535,17 @@ test_data  <- data[-split1,]
 
 # Extensive Modeling --------------------------------------------------------
 
-
 # a) GLM ---------------------------------------------------------------------
-
-# Also have different presampling methods available and try them out one after the other
-# GLM work good with small dataset, with resampling dataset becomes small indeed
 
 glm_grid <- expand.grid(alpha= c(0, 0.2, 0.4, 0.6, 0.8),
                         lambda = c(0.0001, 0.001, 0.1))
 
 glm_tc = trainControl(method = "cv", number = 5,
                       summaryFunction = twoClassSummary,
-                      classProbs = TRUE, # Super important!
+                      classProbs = TRUE, 
                       verboseIter = FALSE,
                       sampling = "rose")
+
 
 # GLM Model only works when NA's are excluded
 train_data_ex_NA = na.omit(train_data)
@@ -583,38 +573,63 @@ max(glm_model_results$crm_eval)
 
 # b) SVM -------------------
 
-# Data Preprocessing for SVM: scale data to [-1, 1]
-# Training Data
-scale_train_data = as.data.table(ReScaling(train_data[, 13:23], t.mn = 0, t.mx = 1)) # Scale continuous feature
-scale_train_data = cbind(train_data[, 1:12], scale_train_data)
+data_svm = data
 
-# Test Data
-scale_test_data = as.data.table(ReScaling(test_data[, 13:23], t.mn = 0, t.mx = 1)) # Scale continuous feature
-scale_test_data = cbind(test_data[, 1:12], scale_test_data)
+# Convert to factors
+data_svm$Client_type = as.factor(data_svm$Client_type)
+data_svm$Bill_shock = as.factor(data_svm$Bill_shock)
+data_svm$Online_account = as.factor(data_svm$Online_account)
+data_svm$Opt_In_Mail = as.factor(data_svm$Opt_In_Mail)
+data_svm$Opt_In_Post = as.factor(data_svm$Opt_In_Post)
+data_svm$Opt_In_Tel = as.factor(data_svm$Opt_In_Tel)
+data_svm$MA_Grundversorger = as.factor(data_svm$MA_Grundversorger)
+data_svm$MA_Erweitert = as.factor(data_svm$MA_Erweitert)
+data_svm$MA_Restlich = as.factor(data_svm$MA_Restlich)
+data_svm$Recovered = as.factor(data_svm$Recovered)
+data_svm$Continuous_relationship = as.factor(data_svm$Continuous_relationship)
 
-set.seed(743) 
-svm_grid_radial <- expand.grid(sigma = c(0.05, 0.0456, 0.0577), C = c(1.5,1.596,1.65,1.89,1.95,2,2.2,2.44))
+str(data_svm)
+
+set.seed(156)
+split1 <- createDataPartition(data_svm$Churn, p=.7, list=FALSE)
+train_data_svm <- data_svm[split1,]
+test_data_svm  <- data_svm[-split1,]
+
+# # Data Preprocessing for SVM: scale data to [-1, 1]
+# # Training Data
+# scale_train_data = as.data.table(ReScaling(data_svm[, 13:23], t.mn = 0, t.mx = 1)) # Scale continuous feature
+# scale_train_data = cbind(train_data[, 1:12], scale_train_data)
+# 
+# # Test Data
+# scale_test_data = as.data.table(ReScaling(test_data[, 13:23], t.mn = 0, t.mx = 1)) # Scale continuous feature
+# scale_test_data = cbind(test_data[, 1:12], scale_test_data)
+
+# set.seed(743) 
+# svm_grid_radial <- expand.grid(sigma = c(0.05, 0.0456, 0.0577), C = c(1.5,1.596,1.65,1.89,1.95,2,2.2,2.44))
 
 svm_tc <- trainControl(method = "cv", number = 5,
                        summaryFunction = twoClassSummary,
-                       classProbs = TRUE) 
+                       search = "random",
+                       classProbs = TRUE)
 
-svm_Radial_Grid <- train(x = scale_train_data[,-1], 
-                         y = scale_train_data$Churn, 
+svm_Radial_Grid <- train(x = data_svm[,-1],
+                         y = data_svm$Churn,
+                         metric = "ROC",
                          method = "svmRadial",
+                         preProcess = c("center","scale"),
                          trControl=svm_tc,
-                         tuneGrid = svm_grid_radial)
+                         tuneLength = 2)
+
+scale_train_data = scale_train_data[, -2]
+scale_test_data = scale_test_data[, -2]
+
+svm_model = svm(Churn ~ ., data = data_svm, kernel = "radial", na.action =
+      na.omit, scale = TRUE)
 
 #Use the predictions on the data
-svm_pred <- predict(model_svm, newdata = scale_test_data[, -1], type ="raw")
+svm_pred <- predict(svm_model, newdata = test_data_svm[,-1], type = "raw")
 
-print(svm_model)
-plot(svm_model)
-
-# Predicting the Test set results
-svm_pred = predict(svm_model, newdata = scale_test_data[,-1])
-
-confusionMatrix(svm_pred, scale_test_data$Churn)
+confusionMatrix(svm_pred, test_data_svm$Churn) 
 
 svm_model_results = as.data.table(svm_model$results)
 svm_model_results$crm_eval = 1.5*svm_model_results$Sens + svm_model_results$Spec
@@ -945,18 +960,8 @@ evalResults$xgb <- predict(xgb_tune,
                            type = "prob")
 
 
-# list(metrics_down_grid_1, )
 
 # XGBoost Specified -----------
-
-(eta = 0.005,
-max_depth = 3.
-gamma = 0.0,
-colsample_bytree = 0.4,
-min_child_weight = 2,
-subsample = 1,
-nrounds = 100)
-
 
 xgb_grid_specified <- expand.grid(nrounds = 50,
                                   max_depth = 3,
@@ -965,14 +970,6 @@ xgb_grid_specified <- expand.grid(nrounds = 50,
                                   colsample_bytree = 0.4,
                                   min_child_weight = 1,
                                   subsample = 1)
-
-xgb_grid_specified = expand.grid(eta = 0.005,
-                                  max_depth = 3,
-                                  gamma = 0.0,
-                                  colsample_bytree = 0.4,
-                                  min_child_weight = 2,
-                                  subsample = 1,
-                                  nrounds = 100)
 
 set.seed(231)
 xgb_model_specified = 
@@ -1034,26 +1031,26 @@ View(xgb_tune_results_imputed)
 # 2) Training, validation, test set
 set.seed(365)
 split1 <- createDataPartition(data$Churn, p=.6, list=FALSE)
-train_data <- data[split1,]
+train_data_h2o <- data[split1,]
 other  <- data[-split1,]
 
 set.seed(234)
 split2 <- createDataPartition(other$Churn, p=.5, list=FALSE)
-eval_data = other[split2,]
-test_data = other[-split2,]
+eval_data_h2o = other[split2,]
+test_data_h2o = other[-split2,]
 
 # Reset train, eval and test data here
-h2o_train_data = train_data
+h2o_train_data = train_data_h2o
 h2o_train_data$Churn = as.character(h2o_train_data$Churn)
 h2o_train_data$Churn[h2o_train_data$Churn == "Yes"] = "Churn"
 h2o_train_data$Churn[h2o_train_data$Churn == "No"] = "No_Churn"
 h2o_train_data$Churn = as.factor(h2o_train_data$Churn)
-h2o_eval_data = eval_data
+h2o_eval_data = eval_data_h2o
 h2o_eval_data$Churn = as.character(h2o_eval_data$Churn)
 h2o_eval_data$Churn[h2o_eval_data$Churn == "Yes"] = "Churn"
 h2o_eval_data$Churn[h2o_eval_data$Churn == "No"] = "No_Churn"
 h2o_eval_data$Churn = as.factor(h2o_eval_data$Churn)
-h2o_test_data = test_data
+h2o_test_data = test_data_h2o
 h2o_test_data$Churn = as.character(h2o_test_data$Churn)
 h2o_test_data$Churn[h2o_test_data$Churn == "Yes"] = "Churn"
 h2o_test_data$Churn[h2o_test_data$Churn == "No"] = "No_Churn"
@@ -1085,9 +1082,9 @@ aml <- h2o.automl(x = features,
                   training_frame = train_hf,
                   # nfolds = 5,
                   validation_frame = valid_hf,
-                  balance_classes = F, # Make sure that set to TRUE
+                  balance_classes = T, # Make sure that set to TRUE
                   sort_metric = "AUC", 
-                  max_runtime_secs = 3600)
+                  max_runtime_secs = 23400)
 
 # View the AutoML Leaderboard
 lb <- aml@leaderboard
@@ -1096,7 +1093,7 @@ lb
 # Save model that is best in regards of crm_eval_correct
 aml@leaderboard # To Do 
 best_model <- aml@leader
-h2o.saveModel(best_model, "C:\\Users\\nilsb\\sciebo\\Master\\3. Semester\\CRM and Direct Marketing\\Project\\Churn-Analysis-CRM\\Models", force = TRUE)
+h2o.saveModel(best_model, "Project\\Churn-Analysis-CRM\\Models", force = TRUE)
 
 # Prediction
 pred <- h2o.predict(best_model, test_hf[, -1])
@@ -1122,9 +1119,6 @@ metrics %>%
   ggplot(aes(x = threshold, y = y, group = x)) +
   facet_wrap(~ x, ncol = 2, scales = "free") +
   geom_line()
-
-
-# Logistic Regression -----------------------------------------------------
 
 
 # Cluster Analysis --------------------------------------------------------
@@ -1665,9 +1659,8 @@ data_2018$Continuous_relationship = as.numeric(as.character(data_2018$Continuous
 data_2018$Age = as.numeric(as.character(data_2018$Age))
 # data_2018$Duration_of_customer_relationship = as.numeric(as.character(data_2018$Duration_of_customer_relationship))
 
-data_2018$Customer_since_interval = ifelse(data_2018$Customer_since_interval < 23, 0, data_2018$Customer_since_interval-22)
-data_2018$Contract_start_date_interval = ifelse(data_2018$Contract_start_date_interval < 23, 0, data_2018$Contract_start_date_interval-22)
-
+# data_2018$Customer_since_interval = ifelse(data_2018$Customer_since_interval < 23, 0, data_2018$Customer_since_interval-22)
+# data_2018$Contract_start_date_interval = ifelse(data_2018$Contract_start_date_interval < 23, 0, data_2018$Contract_start_date_interval-22)
 
 str(data_2018)
 
@@ -1680,298 +1673,3 @@ data_2018_predicted = as.data.table(data_2018_predicted)
 data_2018_predicted[, .N, by = Churn]
 
 write.csv(data_2018_predicted, "Data/Data_Nov_2018_predicted_v2.csv")
-
-
-# Deprecated --------------------------------------------------------------
-
-# Multiple Imputation 
-imp_data = mice(data[data$Client_type == 0], method = "cart") # Imputation only for private customers
-data_impute <- complete(imp_data)
-write.csv(data_impute, "Data/Data_January_2017_Imputed_CART.csv")
-apply(data_impute, 2, function(col)sum(is.na(col))/length(col))
-
-data_firms = data[Client_type == 1]
-imputed_data = base::rbind(data_impute, imp_data)
-
-
-# a) Naive Bayes 
-myControl = trainControl(method = "cv",
-                         number = 5,
-                         classProbs = TRUE)
-
-model = train(Churn ~ ., data = data, method = "naive_bayes", trControl = myControl, na.action = na.pass)
-plot(model)
-
-# 1) Naive Bayes 
-
-nb_classifier = naiveBayes(x = train_data ~ . , data = train_data[, -1], laplace=1)
-nb_pred = predict(nb_classifier, newdata = test_data[,-1])
-test_data$Churn_pred = predict(nb_classifier, newdata = test_data[,-1])
-# test_data[, .N, by = Churn]
-# test_data[, .N, by = Churn_pred]
-
-ConfusionMatrix(y_pred = nb_pred, y_true=test_data$Churn) # nicht die selbe length: "Supplied 21683 items to be assigned to 21684 items of column 'Churn_pred' (recycled leaving remainder of 1 items)."
-
-# First Approaches XGB
-
-# Check whether all variables are numeric
-str(xgb_data)
-
-## 4. Split dataset into testing and training subsets
-
-# Do train, test data splitting once again
-attach(xgb_data)
-smp_siz = floor(0.70*nrow(xgb_data))
-smp_siz  
-
-set.seed(123)   
-train_ind = sample(seq_len(nrow(xgb_data)),size = smp_siz) 
-xgb_train =xgb_data[train_ind,] 
-xgb_test=xgb_data[-train_ind,] 
-
-## 5. Convert the cleaned dataframe to a Dmatrix
-
-# xgb_train_c = xgb.DMatrix(as.matrix(xgb_train))
-# xgb_test_c = xgb.DMatrix(as.matrix(xgb_test))
-
-xgb_train_m = as.matrix(xgb_train)
-xgb_test_m = as.matrix(xgb_test)
-
-## Approach 1
-
-xgboost_model <- xgboost(data = xgb_train_m[ , -1],
-                         label = xgb_train_m[ , 1],
-                         eta = 0.1,
-                         max_depth = 10,
-                         objective = "binary:logistic",
-                         nrounds = 200,
-                         verbose = FALSE,
-                         prediction = TRUE)
-xgboost_model
-
-predict(xgboost_model,
-        as.matrix(xgb_test_m[, -1])) %>%
-  as.tibble() %>%
-  mutate(prediction = round(value),
-         label = xgb_test_m[ , 1]) %>%
-  count(prediction, label)
-
-# Approach 2
-
-xgb_train_c = xgb.DMatrix(as.matrix(xgb_train), label = xgb_train$Churn)
-xgb_test_c = xgb.DMatrix(as.matrix(xgb_test), label = xgb_test$Churn)
-
-params <- list(booster = "gbtree", 
-               objective = "binary:logistic", 
-               eta=0.3, 
-               gamma=0, 
-               max_depth=6)
-
-watchlist <- list(train = xgb_train_c, eval = xgb_test_c)
-
-bst_model <- xgb.train(params = params, 
-                       data = xgb_train_c, 
-                       nrounds = 200, 
-                       watchlist = watchlist,
-                       verbose = FALSE,
-                       prediction = TRUE)
-bst_model
-
-# Approach 3 
-
-cv <- xgb.cv(data = xgb_train_m[ , -1],
-             label = xgb_train_m[ , 1],
-             nrounds = 150,
-             nfold = 5,
-             objective = "binary:logistic",
-             eta = 0.01,
-             max_depth = 6,
-             verbose = 0    # silent
-)
-
-# Get the evaluation log 
-elog <- as.data.frame(cv$evaluation_log)
-elog
-
-# Determine and print how many trees minimize training and test error
-elog %>% 
-  summarize(ntrees.train = which.min(train_error_mean),   # find the index of min
-            ntrees.test  = which.min(test_error_mean))   # find the index of min
-
-# The number of trees to use, as determined by xgb.cv
-set.seed(123)
-ntrees_train <- elog$ntrees.train
-ntrees_test <- elog$ntrees.test
-
-ntrees = ntrees_test
-
-xgb_model_with_cv = xgboost(data = xgb_train_m[ , -1],
-                            label = xgb_train_m[ , 1],  # column of outcomes
-                            nrounds = 100,       # number of trees to build
-                            objective = "binary:logistic", # objective
-                            eta = 0.01,
-                            depth = 6,
-                            verbose = 0,
-                            eval_metrix = "auc")  # silent
-
-# Predict on the Training Data 
-pred_xgb_model_with_cv <- predict(xgb_model_with_cv, newdata=xgb_test_m[,-1])
-
-# To Do: Convert Probabilities back into labels 
-predict(xgb_model_with_cv, newdata=xgb_test_m[,-1]) %>%
-  as.tibble() %>%
-  mutate(prediction = round(value),
-         label = xgb_test_m[ , 1]) %>%
-  count(prediction, label)
-
-
-# Show Confusion Matrix
-ConfusionMatrix(pred_xgb_model_with_cv, xgb_test_m[,1])
-
-
-
-# Change "Yes" and "No" to "Ja" and "Nein" in order to restructure the alphabetical order, which might lead to a right calculation of the confusion matrix rates 
-
-h2o_data = xgb_data
-
-h2o_data$Churn = as.character(h2o_data$Churn)
-h2o_data$Churn[h2o_data$Churn == "Yes"] = "Ja"
-h2o_data$Churn[h2o_data$Churn == "No"] = "Nein"
-h2o_data$Churn = as.factor(h2o_data$Churn)
-
-levels(h2o_data$Churn)
-h2o_data$Churn = factor(h2o_data$Churn, levels = c("Ja", "Nein"))
-levels(h2o_data$Churn)
-
-# Create training, validation and test set
-set.seed(789)
-split1 <- createDataPartition(h2o_data$Churn, p=.6, list=FALSE)
-h2o_train_data <- h2o_data[split1,]
-other  <- h2o_data[-split1,]
-
-set.seed(2342)
-split2 <- createDataPartition(other$Churn, p=.5, list=FALSE)
-h2o_eval_data = other[split2,]
-h2o_test_test = other[-split2,]
-
-## 1. Remove information about the target variable from the training data
-# Not applicable here
-## 2. Reduce the amount of redundant information
-# Already done (deleted Customer_ID, V1, and so on)
-
-## 3. Convert categorical information (like country) to a numeric format
-
-# xgb_data$Churn = as.character(xgb_data$Churn)
-# xgb_data$Churn[xgb_data$Churn == "No"] = "0"
-# xgb_data$Churn[xgb_data$Churn == "Yes"] = "1"
-# xgb_data$Churn = as.numeric(xgb_data$Churn)
-# xgb_data$Churn = as.character(xgb_data$Churn)
-# xgb_data$Churn[xgb_data$Churn == "0"] = "No"
-# xgb_data$Churn[xgb_data$Churn == "1"] = "Yes"
-# xgb_data$Churn = as.factor(xgb_data$Churn)
-
-
-xgb_data = data
-
-
-xgb_data$Churn = as.factor(xgb_data$Churn)
-xgb_data$Client_type = as.numeric(as.character(xgb_data$Client_type))
-xgb_data$Bill_shock = as.numeric(as.character(xgb_data$Bill_shock))
-xgb_data$Online_account = as.numeric(as.character(xgb_data$Online_account))
-xgb_data$Opt_In_Mail = as.numeric(as.character(xgb_data$Opt_In_Mail))
-xgb_data$Opt_In_Post = as.numeric(as.character(xgb_data$Opt_In_Post))
-xgb_data$Opt_In_Tel = as.numeric(as.character(xgb_data$Opt_In_Tel))
-xgb_data$MA_Grundversorger = as.numeric(as.character(xgb_data$MA_Grundversorger))
-xgb_data$MA_Erweitert = as.numeric(as.character(xgb_data$MA_Erweitert))
-xgb_data$MA_Restlich = as.numeric(as.character(xgb_data$MA_Restlich))
-xgb_data$Recovered = as.numeric(as.character(xgb_data$Recovered))
-xgb_data$Continuous_relationship = as.numeric(as.character(xgb_data$Continuous_relationship))
-xgb_data$Age = as.numeric(as.character(xgb_data$Age))
-xgb_data$Duration_of_customer_relationship = as.numeric(as.character(xgb_data$Duration_of_customer_relationship))
-
-
-
-
-str(xgb_data)
-
-# Change order of factor levels such that "Yes" is interpreted as positive and "No" is interpreted as negative 
-levels(xgb_data$Churn)
-xgb_data$Churn = factor(xgb_data$Churn, levels = c("Yes", "No"))
-levels(xgb_data$Churn)
-
-
-
-# Create training, validation and test set
-set.seed(156)
-split1 <- createDataPartition(xgb_data$Churn, p=.6, list=FALSE)
-xgb_train_data <- xgb_data[split1,]
-other  <- xgb_data[-split1,]
-
-set.seed(234)
-split2 <- createDataPartition(other$Churn, p=.5, list=FALSE)
-xgb_eval_data = other[split2,]
-xgb_test_test = other[-split2,]
-
-
-# h2o_data$Churn = as.character(h2o_data$Churn)
-# h2o_data$Churn[h2o_data$Churn == "Yes"] = "Ja"
-# h2o_data$Churn[h2o_data$Churn == "No"] = "Nein"
-# h2o_data$Churn = as.factor(h2o_data$Churn)
-
-
-
-# Mean per class error
-# h2o.mean_per_class_error(best_model, train = TRUE, valid = TRUE, xval = TRUE)
-# h2o.auc(best_model, train = TRUE)
-# h2o.auc(best_model, valid = TRUE)
-# h2o.auc(best_model, xval = TRUE)
-
-# f3) GLM 
-
-h2o_glm = h2o.glm(x = features, 
-                  y = response,
-                  training_frame = train_hf,
-                  nfolds = 5,
-                  # validation_frame = valid_hf,
-                  balance_classes = TRUE, # Make sure that set to TRUE
-                  max_runtime_secs = 240)
-
-pred <- h2o.predict(h2o_glm, test_hf[, -1])
-
-# Confusion matrix on validation data
-perf <- h2o.performance(h2o_glm, test_hf) 
-h2o.confusionMatrix(perf)
-plot(perf)
-
-
-# f_2) Gradient Boosting Machine
-
-h2o_gbm <- h2o.gbm(x = features, 
-                   y = response,
-                   training_frame = train_hf,
-                   nfolds = 5,
-                   # validation_frame = valid_hf,
-                   balance_classes = TRUE, # Make sure that set to TRUE
-                   max_runtime_secs = 240)
-
-
-pred <- h2o.predict(h2o_gbm, test_hf[, -1])
-
-# Confusion matrix on validation data
-perf <- h2o.performance(h2o_gbm, test_hf) 
-h2o.confusionMatrix(perf)
-plot(perf)
-
-# # Correlation Plot
-# corrplot.mixed(corr=cor(data_2018[, .(Age, 
-#                                  Notice_period,
-#                                  Consumption, 
-#                                  Payment_on_account,
-#                                  Annual_account, 
-#                                  DBII, 
-#                                  Minimum_contract_term, 
-#                                  Customer_since_interval,
-#                                  Contract_start_date_interval, 
-#                                  Actual_payment)], use="complete.obs", method="pearson"), 
-#                                  upper="ellipse", 
-#                                  tl.pos="lt")
