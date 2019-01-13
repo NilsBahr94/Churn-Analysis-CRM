@@ -1,4 +1,4 @@
-# Install Packages --------------------------------------------------------
+#Install Packages --------------------
 
 install.packages("tidyverse")
 install.packages("car")
@@ -30,8 +30,6 @@ install.packages("MLmetrics")
 install.packages("ISLR")
 install.packages("randomForest")
 install.packages("gridExtra")
-install.packages('zeligverse')
-# Install dependencies for H20
 install.packages("RCurl")
 install.packages("bitops")
 install.packages("rjson")
@@ -39,73 +37,67 @@ install.packages("statmod")
 install.packages("tools")
 install.packages("yaml")
 install.packages("ModelMetrics")
-# Install H20
-# The following two commands remove any previously installed H2O packages for R.
-if ("package:h2o" %in% search()) { detach("package:h2o", unload=TRUE) }
-if ("h2o" %in% rownames(installed.packages())) { remove.packages("h2o") }
-# # Next, we download packages that H2O depends on.
-pkgs <- c("RCurl","jsonlite")
-for (pkg in pkgs) {
-  if (! (pkg %in% rownames(installed.packages()))) { install.packages(pkg) }
-}
-# Now we download, install and initialize the H2O package for R.
-install.packages("h2o", type="source", repos="http://h2o-release.s3.amazonaws.com/h2o/rel-xu/1/R")
+install.packages("Zelig")
+install.packages("recipes")   
+install.packages("ggthemes")
+install.packages("DescTools")
+install.packages("ResourceSelection")
+install.packages("pROC")
 
-# Finally, let's load H2O and start up an H2O cluster
+#Load Packages --------------------
 
-# Load Packages ------------------------------------------------------------
+require("tidyverse")
+require("car")
+require("MASS")
+require("readxl")
+require("tidyverse")
+require("dplyr")
+require("data.table")
+require("ggplot2")
+require("caret")
+require("pROC")
+require("lubridate")
+require("xgboost")
+require("klaR")
+require("rlang")
+require("mice")
+require("corrplot")
+require("dplyr")
+require("factoextra")
+require("VIM")
+require("purrr")
+require("corrplot")
+require("gplots")
+require("rsample")
+require("yardstick")
+require("ggthemes")
+require("e1071")
+require("MLmetrics")
+require("ISLR")
+require("randomForest")
+require("gridExtra")
+require("RCurl")
+require("bitops")
+require("rjson")
+require("statmod")
+require("tools")
+require("yaml")
+require("ModelMetrics")
+require("Zelig")
+require("recipes")   
+require("ggthemes")
+require("DescTools")
+require("ResourceSelection")
+require("pROC")
 
-require(readxl)
-require(tidyverse)
-require(dplyr)
-require(data.table)
-require(ggplot2)
-require(caret)
-require(car)
-require(MASS)
-require(xgboost)
-require(klaR)
-require(rlang)
-require(mice)
-require(corrplot)
-require(dplyr)
-require(factoextra)
-require(VIM)
-require(purrr)
-require(corrplot)
-require(gplots)
-library(readr)     # for fast reading of input files
-library(rsample)   # for splitting training and test data
-library(recipes)   # for preprocessing
-library(ggthemes)  # for additional plotting themes
-library(e1071)
-library(MLmetrics)
-library(ISLR)
-library(randomForest)
-require(lubridate)
-require(zeligverse)
-# Dependencies for H20
-require(RCurl)
-require(bitops)
-require(rjson)
-require(statmod)
-require(tools)
-require(yaml)
-library(h2o)
+#Import 2017 Data --------------------
 
-# Import 2017 Data -------------------------------------------------------------
+data_2017 = read_excel("Data/Data January 2017.xlsx", na = "-", col_types = c("text","guess","guess","text","guess","guess","guess","guess","guess","guess","guess","numeric","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess"))
+write.csv2(data_2017, "Data/Data_January_2017_3.csv")
 
-# data_2017 = read_excel("Data/Data January 2017.xlsx", na = "-", col_types = c("text","guess","guess","text","guess","guess","guess","guess","guess","guess","guess","numeric","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess","guess"))
-# write.csv2(data_2017, "Data/Data_January_2017_3.csv")
-
-L
 data = fread("Data/Data_January_2017_3.csv", na.strings = "NA", dec = ",")
 
-# N
-#data = fread("Data\\Data_January_2017_3.csv", na.strings = "NA", dec = ",")
-
-
-#remove title and V1 from the data set
+#Remove "title" and "V1" from the data set
 data = data[,c("Contract_ID", 
                "Client type", 
                "Zip code", 
@@ -129,7 +121,7 @@ data = data[,c("Contract_ID",
                "DBII", 
                "Churn")]
 
-#rename cols in order to avoid problems with imputation
+#Rename cols in order to avoid problems with imputation
 
 names(data)[names(data) == 'Client type'] <- 'Client_type' # Customer since, Notice Period, Automatic Contract extension
 names(data)[names(data) == 'Zip code'] <- 'Zip_code'
@@ -148,12 +140,12 @@ names(data)[names(data) == 'Opt In Post'] <- 'Opt_In_Post'
 names(data)[names(data) == 'Opt In Tel'] <- 'Opt_In_Tel'
 names(data)[names(data) == 'Market area'] <- 'Market_area'
 
-# Data Preparation --------------------------------------------------------
+#Data Preparation --------------------
 
-# Online Account - NA to 0 
+# Online Account: NA to 0 
 data$Online_account[is.na(data$Online_account)] = 0
 
-# Recovered - "" to 0 and "X" to 1
+#Recovered: "" to 0 and "X" to 1
 data$Recovered[data$`Recovered`=="X"] = 1
 data$Recovered[is.na(data$`Recovered`)] = 0
 
@@ -202,17 +194,7 @@ data$Customer_since_interval = as.integer(data$Customer_since_interval)
 data$`Contract_start_date_interval` = interval(ymd(data$`Contract_start_date`), ymd(20170201)) %/% months(1)
 data$Contract_start_date_interval = as.integer(data$Contract_start_date_interval)
 
-# Feature Engineering -------------------------------------------------------------
-
-# Create feature "not_opted" 
-# data[Opt_In_Mail == "0" & Opt_In_Post == "0" & Opt_In_Tel == "0", .N, by= Churn] 
-#However, only non-churners have this combination, therefore this new feature would not be meaningful
-
-#Create feature "international"
-data$`International` = unlist(gregexpr("[0-9]{5}", data$`Zip_code`))
-data$`International`[data$`International` == 1] = 0
-data$`International`[data$`International` == -1] = 1
-data$`International` = as.factor(data$`International`)
+# Feature Engineering --------------------
 
 #Create feature "annual payment"
 data$`Actual_payment` = data$Payment_on_account * 12 + data$Annual_account
@@ -222,19 +204,18 @@ data$`Continuous_relationship` = ifelse(data$Contract_start_date==data$Customer_
 data$Continuous_relationship = as.factor(data$Continuous_relationship)
 
 #Delete Customer_since, Contract_start_date, and Duration_of_customer_relationship
-
 data$Duration_of_customer_relationship <- NULL
 data$Customer_since <- NULL
 data$Contract_start_date <- NULL
 
-# Imputation  --------------------------------------------------------------
+#Imputation  --------------------
 
 # Detect Percentage of NA's per feature
 apply(data, 2, function(col)sum(is.na(col))/length(col))
 md.pattern(data, plot= T)
 md.pairs(data)
 
-# Multiple Imputation (only for private customers)
+#Multiple Imputation (only for private customers)
 private_customers = subset(data[which(data$Client_type==0),])
 corporate_customers = subset(data[which(data$Client_type==1),])
 
@@ -243,19 +224,20 @@ private_customers <- complete(imp_data)
 
 data <- rbind(private_customers,corporate_customers)
 
-# Outlier ----------------------------------------------------------------
+#Outlier --------------------
 
-# Outlier Detection & Elimination
+#Outlier Detection & Elimination
 summary(data)
 
-# Set to NA, since we interprete these factors as not meaningful
+#Set to NA, since we interprete these factors as not meaningful
 data$Age[data$Age >= 105] = NA 
 data$Age[data$Age < 18] = NA
 private_customers$Age[private_customers$Age >= 105] = NA 
 private_customers$Age[private_customers$Age < 18] = NA
 
-#Datasets for LR (corporate and private customers) -------------
-#Dataset without ContractID, Zip_code, and Age
+#Datasets for LR (corporate and private customers) --------------------
+
+#Dataset without "ContractID", "Zip_code", and "Age"
 data1 = data[, .(Churn, 
                      Client_type, 
                      Bill_shock, 
@@ -281,10 +263,9 @@ data1 = data[, .(Churn,
 #Delete observations with missing values as Logistic Regression requires a complete dataset 72282
 data1 = na.omit(data1) #reduction from 72282 observations to 72173 observations (-109 observations)
 
+#Classic Logistic Regression --------------------
 
-#Classic Logistic Regression -----------------------------------
-
-#Influence of single IVs on DV -------------------------
+#Influence of single IVs on DV --------------------
 
 ctrl <- trainControl(method = "cv", number = 10, savePredictions = "final")
 
@@ -448,7 +429,8 @@ m_Contract_start_date_interval <- train(Churn ~   Contract_start_date_interval,
 
 summary(m_Contract_start_date_interval)
 
-# Data split (70/30 split)
+#Data split (70/30 split)
+
 smp_size = floor(0.7*nrow(data1))
 set.seed(123)
 sample = sample(seq_len(nrow(data1)),size = smp_size)
@@ -458,7 +440,7 @@ test_data =data1[-sample,]
 summary(train_data) #189 churners; 50332 non-churners
 summary(test_data) #90 churners; 21562 non-churners
 
-#Model building -----------------------
+#Model building --------------------
 
 #Logistic regression including all variables
 
@@ -493,7 +475,7 @@ summary(m_2)
 anova(m_2, test="Chisq")
 vif(m_2)
 
-#Calcualte Model fit statistics
+#Calcualte model fit statistics
 PseudoR2(m_2, which = "all")
 hoslem.test(m_2$y, fitted(m_2, g=10))
 
@@ -505,9 +487,7 @@ vif(m_2_bw)
 g_2_bth$anova
 
 #Calcualte Model fit statistics
-library(DescTools)
 PseudoR2(m_2_bw, which = "all")
-library(ResourceSelection)
 hoslem.test(m_2_bw$y, fitted(m_2_bw), g=10)
 
 #Model forward selection 
@@ -532,12 +512,9 @@ vif(m_3_both)
 PseudoR2(m_3_both, which = "all")
 hoslem.test(m_3_both$y, fitted(m_3_fw, g=10))
 
-#Rare events logistic regression (ReLogit) -------------
+#Rare events logistic regression (ReLogit) --------------------
 
-install.packages("Zelig")
-require(Zelig)
-
-#Influence of single IVs on DV -------------------------
+#Influence of single IVs on DV --------------------
 
 train_data$Churn = as.integer(train_data$Churn) #Required to run relogit model
 train_data$Churn = train_data$Churn-1
@@ -579,7 +556,7 @@ zelig(Churn ~  Customer_since_interval, tau = 189/50521, model = "relogit",  cas
 zelig(Churn ~  Contract_start_date_interval, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
 
 
-#Build models with multiple variables in the model based on selection methods from classic logistic regression------
+#Build models with multiple variables in the model based on selection methods from classic logistic regression --------------------
 
 m_2_re <- zelig(Churn ~  Client_type + Bill_shock + Online_account + Opt_In_Mail + Opt_In_Post + Opt_In_Tel + Recovered + Continuous_relationship + Notice_period + Payment_on_account + Annual_account + International + Market_area + DBII + Automatic_contract_extension + Minimum_contract_term + Customer_since_interval + Contract_start_date_interval, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data)
 
@@ -598,6 +575,20 @@ m_3_bw_re <- zelig(Churn ~ Bill_shock + Opt_In_Post + Recovered + Consumption +
 summary(m_3_bw_re)
 exp(coef(m_3_bw_re))
 
+#Box-Tidwell Test
+train_data$lnConsumption <- log(train_data$Consumption)
+train_data$lnPayment_on_account <- log(train_data$Payment_on_account)
+train_data$lnAnnual_account <- log(train_data$Annual_account)
+train_data$lnMinimum_contract_term <- log(train_data$Minimum_contract_term)
+train_data$lnCustomer_since_interval <- log(train_data$Customer_since_interval)
+train_data$lnContract_start_date_interval <- log(train_data$Contract_start_date_interval)
+
+boxtidwell <- zelig(Churn ~ Bill_shock + Opt_In_Post + Recovered + Consumption + Consumption*lnConsumption +
+                      Payment_on_account + Payment_on_account*lnPayment_on_account + Annual_account + Market_area + Minimum_contract_term + Minimum_contract_term*lnMinimum_contract_term +
+                      Customer_since_interval + Customer_since_interval*lnCustomer_since_interval + Contract_start_date_interval + Contract_start_date_interval*lnContract_start_date_interval, tau = 189/50521, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = test_data)
+
+summary(boxtidwell)
+
 test_data$Prob_m_3_bw_re = predict(m_3_bw_re, test_data, type="response")
 
 m_3_fw_re <- zelig(Churn ~ Customer_since_interval + Market_area + Contract_start_date_interval + 
@@ -610,14 +601,9 @@ m_3_bth_re <- zelig(Churn ~ Customer_since_interval + Market_area + Contract_sta
 
 test_data$Prob_m_3_bth_re = predict(m_3_bth_re, test_data, type="response")
 
-#Evaluate model performances ---------------------
+#Evaluate model performances --------------------
 
-library(ggplot2)
-require(caret)
-library(pROC)
-library(gplots)
-
-#m_2_re -----------------
+#m_2_re --------------------
 
 test_data$Pred_m_2_re <- ifelse(test_data$Prob_m_2_re < 0.003,"0", "1")
 test_data$Pred_m_2_re <- as.factor(test_data$Pred_m_2_re)
@@ -640,7 +626,7 @@ coords(roc_m_2_re, x = "best", best.method = "c", input = "threshold")
 # Determine Threshold which minimizes Misspecification Costs
 coords(roc, x= "best", best.weights = c(3,0.3), input = "threshold")
 
-#m_2_bw_re -----------------
+#m_2_bw_re --------------------
 
 test_data$Pred_m_2_bw_re <- ifelse(test_data$Prob_m_2_bw_re < 0.003,"0", "1")
 test_data$Pred_m_2_bw_re <- as.factor(test_data$Pred_m_2_bw_re)
@@ -649,7 +635,7 @@ confusionMatrix(data = test_data$Pred_m_2_bw_re, reference= test_data$Churn, pos
 #Area under curve
 auc(test_data$Churn, test_data$Prob_m_2_bw_re)
 
-#m_3_bw_re ------------------
+#m_3_bw_re --------------------
 
 test_data$Pred_m_3_bw_re <- ifelse(test_data$Prob_m_3_bw_re < 0.003,"0", "1")
 test_data$Pred_m_3_bw_re <- as.factor(test_data$Pred_m_3_bw_re)
@@ -663,7 +649,7 @@ roc_m_3_bw_re <- roc(response = test_data$Churn, predictor = test_data$Prob_m_3_
 coords(roc_m_3_bw_re, x= "best", best.method = "y", input = "threshold", ret=c("threshold", "specificity", "sensitivity"))
 coords(roc_m_3_bw_re, x = "best", best.method = "c", input = "threshold")
 
-#m_3_fw_re ------------------
+#m_3_fw_re --------------------
 
 test_data$Pred_m_3_fw_re <- ifelse(test_data$Prob_m_3_fw_re < 0.003,"0", "1")
 test_data$Pred_m_3_fw_re <- as.factor(test_data$Pred_m_3_fw_re)
@@ -672,7 +658,7 @@ confusionMatrix(data = test_data$Pred_m_3_fw_re, reference= test_data$Churn, pos
 #Area under curve
 auc(test_data$Churn, test_data$Prob_m_3_fw_re)
 
-#m_3_bth_re ------------------
+#m_3_bth_re --------------------
 
 test_data$Pred_m_3_bth_re <- ifelse(test_data$Prob_m_3_bth_re < 0.003,"0", "1")
 test_data$Pred_m_3_bth_re <- as.factor(test_data$Pred_m_3_bth_re)
@@ -681,7 +667,7 @@ confusionMatrix(data = test_data$Pred_m_3_bth_re, reference= test_data$Churn, po
 #Area under curve
 auc(test_data$Churn, test_data$Prob_m_3_bth_re)
 
-#Logistic regression for private customers only -------------
+#Logistic regression for private customers only --------------------
 summary(private_customers)
 
 #Omit variables with missing values (due to Age under 18 or over 104)
@@ -693,7 +679,7 @@ private_customers$Zip_code <- NULL
 private_customers$Contract_ID <- NULL
 private_customers$Client_type <- NULL
 
-# Data split (70/30 split)
+#Data split (70/30 split)
 set.seed(123)
 split1 <- createDataPartition(private_customers$Churn, p=.7, list=FALSE)
 train_data_private <- private_customers[split1,]
@@ -701,7 +687,6 @@ test_data_private  <- private_customers[-split1,]
 
 summary(train_data_private) #194 churners and 49637 non-churners
 summary(test_data_private) #82 churners and 21272 non-churners
-
 
 #Full model
 private_full <- glm(Churn ~., data = train_data_private, family = binomial)
@@ -713,7 +698,6 @@ private_full_bw <- stepAIC(private_full, direction="backward", trace = T)
 summary(private_full_bw)
 
 vif(private_full_bw)
-library(DescTools)
 PseudoR2(private_full_bw, which = "all")
 hoslem.test(private_full_bw$y, fitted(private_full_bw, g=10))
 
@@ -740,14 +724,21 @@ private_full_bw_re <- zelig(Churn ~ Age + Minimum_contract_term + Consumption + 
 
 summary(private_full_bw_re)
 
-private_null_fw_re <- zelig(Churn ~ Customer_since_interval + Contract_start_date_interval + 
-                              Market_area + Consumption + Age + Annual_account + Bill_shock + 
-                              Minimum_contract_term
+#Box-Tidwell Test
+train_data_private$lnAge <- log(train_data_private$Age)
+train_data_private$lnMinimum_contract_term <- log(train_data_private$Minimum_contract_term)
+train_data_private$lnConsumption <- log(train_data_private$Consumption)
+train_data_private$lnAnnual_account <- log(train_data_private$Annual_account)
+train_data_private$lnCustomer_since_interval <- log(train_data_private$Customer_since_interval)
+train_data_private$lnContract_start_date_interval <- log(train_data_private$Contract_start_date_interval)
+
+
+boxtidwell_private <- zelig(Churn ~ Age + Age*lnAge + Minimum_contract_term + Minimum_contract_term*lnMinimum_contract_term + Consumption + Consumption*lnConsumption + Annual_account + 
+                              Annual_account*lnAnnual_account + Bill_shock + Market_area + Customer_since_interval + Customer_since_interval*lnCustomer_since_interval + Contract_start_date_interval + Contract_start_date_interval*lnContract_start_date_interval
                             , tau = 194/49831, model = "relogit",  case.control = "weighting", bias.correct = TRUE, data = train_data_private)
+summary(boxtidwell_private)
 
-summary(private_null_fw_re)
-
-#Model evaluation ---------------
+#Model evaluation --------------------
 
 #Private_full_bw_re
 Prob_private_full_bw_re <- predict(private_full_bw_re, test_data_private, type="response")
@@ -756,19 +747,18 @@ test_data_private$Pred_private_full_bw_re <- ifelse(test_data_private$Prob_priva
 test_data_private$Pred_private_full_bw_re <- as.factor(test_data_private$Pred_private_full_bw_re)
 confusionMatrix(data = test_data_private$Pred_private_full_bw_re, reference= test_data_private$Churn, positive = "1")
 
-  #Area under curve = 0.7427
+#Area under curve = 0.7427
 auc(test_data_private$Churn, test_data_private$Prob_private_full_bw_re)
 
-#Import 2018 data ---------------
+#Import 2018 data --------------------
 
 data_2018 = read_excel("Data/Data November 2018.xlsx", na = "-", col_types = c("text","guess","guess","text","guess","guess","guess","guess","guess","guess","guess","numeric","guess","guess","guess","guess","guess","guess","guess","guess","text","guess"))
 write.csv2(data_2018, "Data/Data_November_2018.csv")
 
-#Mac
 data_2018 = fread("Data/Data_November_2018.csv", na.strings = "NA", dec = ",")
 
-# Data Preparation 
-#remove title and V1 from the data set
+#Data Preparation --------------------
+#Remove "title" and "V1" from the data set
 data_2018 = data_2018[,c("Contract_ID", 
                          "Client type", 
                          "Zip code", 
@@ -791,7 +781,7 @@ data_2018 = data_2018[,c("Contract_ID",
                          "Recovered", 
                          "DBII")]
 
-#rename cols in order to avoid problems with imputation
+#Rename cols in order to avoid problems with imputation
 
 names(data_2018)[names(data_2018) == 'Client type'] <- 'Client_type' # Customer since, Notice Period, Automatic Contract extension
 names(data_2018)[names(data_2018) == 'Zip code'] <- 'Zip_code'
@@ -810,10 +800,10 @@ names(data_2018)[names(data_2018) == 'Opt In Post'] <- 'Opt_In_Post'
 names(data_2018)[names(data_2018) == 'Opt In Tel'] <- 'Opt_In_Tel'
 names(data_2018)[names(data_2018) == 'Market area'] <- 'Market_area'
 
-# Online Account - NA to 0 
+# Online Account: NA to 0 
 data_2018$Online_account[is.na(data_2018$Online_account)] = 0
 
-# Recovered - "" to 0 and "X" to 1
+# Recovered: "" to 0 and "X" to 1
 data_2018$Recovered[data_2018$Recovered=="X"] = 1
 data_2018$Recovered[is.na(data_2018$Recovered)] = 0
 
@@ -840,7 +830,7 @@ data_2018$Customer_since <- NULL
 data_2018$Contract_start_date <- NULL
 data_2018$Duration_of_customer_relationship <- NULL
 
-## Feature Conversion
+#Feature Conversion
 #Convert features into right data types
 data_2018$Contract_ID = as.character(data_2018$Contract_ID)
 data_2018$`Zip_code` = as.character(data_2018$`Zip_code`)
@@ -863,7 +853,7 @@ data_2018$DBII = as.numeric(data_2018$DBII)
 data_2018$Customer_since_interval = as.numeric(data_2018$Customer_since_interval)
 data_2018$Contract_start_date_interval = as.numeric(data_2018$Contract_start_date_interval)
 
-# Feature Engineering 
+#Feature Engineering --------------------
 #Create feature "annual payment"
 data_2018$`Actual_payment` = data_2018$Payment_on_account * 12 + data_2018$Annual_account
 
@@ -879,12 +869,11 @@ data_2018$Age[data_2018$Age < 18] = NA
 summary(data_2018)
 str(data_2018)
 
-#Reset customer_since_interval -22 months
+#Reset customer_since_interval -22 months as values in 2018 dataset are higher and, thus, LR leads to wrong predictions
 data_2018$Customer_since_interval = ifelse(data_2018$Customer_since_interval<23,0,data_2018$Customer_since_interval-22)
 data_2018$Contract_start_date_interval = ifelse(data_2018$Contract_start_date_interval<23,0,data_2018$Contract_start_date_interval-22)
 
-
-#Apply final LR model ----------
+#Apply final LR model --------------------
 data_2018$Prob_final <- predict(m_3_bw_re, data_2018, type="response")
 data_2018$Pred_final <- unlist(data_2018$Prob_final, use.names=FALSE)
 data_2018$Pred_final <- ifelse(data_2018$Pred_final < 0.003 ,"0", "1")
